@@ -45,6 +45,20 @@ function markerHtml(color = '#0ea5e9', label = '•') {
   return `<div style="width:${size}px;height:${size}px;display:flex;align-items:center;justify-content:center;background:${color};color:#fff;font-size:10px;font-weight:600;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,.25);">${label}</div>`;
 }
 
+// Validar coordenadas seguras antes de crear marcadores
+function isValidCoord(lat, lon) {
+  return Number.isFinite(lat) && Number.isFinite(lon) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180;
+}
+
+// Desglosa una dirección libre en: calle/número, comuna y región (heurístico por comas)
+function splitAddress(addr) {
+  const s = (addr || '').trim();
+  if (!s) return { calleNumero: '-', comuna: '-', region: '-', resto: '' };
+  const parts = s.split(',').map(p => p.trim()).filter(Boolean);
+  const [calleNumero = '-', comuna = '-', region = '-', ...rest] = parts;
+  return { calleNumero, comuna, region, resto: rest.join(', ') };
+}
+
 // Chip de estado con iconos y estilos
 function estadoChip(estadoRaw) {
   const e = (estadoRaw || '').toString().toLowerCase();
@@ -80,6 +94,7 @@ export default function MapaViviendas() {
   const [projects, setProjects] = useState([]);
   const [editMode, setEditMode] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState(null);
+  const [expandedHousingId, setExpandedHousingId] = useState(null);
   
   // Montaje/desmontaje para evitar setState tras unmount
   useEffect(() => {
@@ -134,12 +149,13 @@ export default function MapaViviendas() {
       // Proyectos: normalizar lat/lon también
       const rawProj = Array.isArray(resProj?.data) ? resProj.data : [];
       const projList = rawProj
-        .map(p => ({
-          ...p,
-          latitud: toNum(p.latitud ?? p.latitude ?? p.lat),
-          longitud: toNum(p.longitud ?? p.longitude ?? p.lng ?? p.lon),
-        }))
-        .filter(p => Number.isFinite(p.latitud) && Number.isFinite(p.longitud) && inRange(p.latitud, p.longitud));
+        .map(p => {
+          const lat = toNum(p.latitud ?? p.latitude ?? p.lat);
+          const lon = toNum(p.longitud ?? p.longitude ?? p.lng ?? p.lon);
+          const hasCoords = Number.isFinite(lat) && Number.isFinite(lon) && inRange(lat, lon);
+          return { ...p, latitud: lat, longitud: lon, hasCoords };
+        });
+      // NO filtramos: queremos listar también proyectos sin coordenadas para poder seleccionarlos y ver sus viviendas.
       if (isMountedRef.current) setProjects(projList);
     } catch (e) {
       console.warn('No se pudieron cargar viviendas:', e?.message);
@@ -186,20 +202,29 @@ export default function MapaViviendas() {
       const txt = `${d?.proyecto?.nombre || ''} ${d?.direccion_normalizada || d?.direccion || ''}`.toLowerCase();
       return txt.includes(search.toLowerCase());
     });
-    const leafletMarkers = viviendaFilter.map(f => L.marker([f.latitud, f.longitud], {
+    const leafletMarkers = viviendaFilter.filter(f => isValidCoord(f.latitud, f.longitud)).map(f => L.marker([f.latitud, f.longitud], {
       icon: L.divIcon({ className: 'vivienda-marker', html: markerHtml('#0ea5e9', '•'), iconSize: [18,18], iconAnchor:[9,9], popupAnchor:[0,-12] })
-    }).bindPopup(`
-      <div style="min-width:220px">
-        <strong>Vivienda ${f.numero_vivienda || ''}</strong><br/>
-        Proyecto: ${f?.proyecto?.nombre || '-'}<br/>
-        Estado: ${f?.estado || '-'}<br/>
-        Dirección: ${f?.direccion_normalizada || f?.direccion || '-'}
-      </div>
-    `));
+    }).bindPopup((() => {
+      const a = splitAddress(f?.direccion_normalizada || f?.direccion);
+      const lat = Number(f.latitud).toFixed(6);
+      const lon = Number(f.longitud).toFixed(6);
+      return `
+        <div style="min-width:260px">
+          <strong>Vivienda ${f.numero_vivienda || ''}</strong><br/>
+          Proyecto: ${f?.proyecto?.nombre || '-'}<br/>
+          Estado: ${f?.estado || '-'}<br/>
+          <hr style="margin:6px 0;opacity:.2"/>
+          <div><strong>Calle:</strong> ${a.calleNumero}</div>
+          <div><strong>Comuna:</strong> ${a.comuna}</div>
+          <div><strong>Región:</strong> ${a.region}</div>
+          ${a.resto ? `<div><strong>Extra:</strong> ${a.resto}</div>` : ''}
+          <div style="margin-top:4px"><strong>Coords:</strong> ${lat}, ${lon}</div>
+        </div>`;
+    })()));
     leafletMarkers.forEach(m => markersLayer.current.addLayer(m));
     // Proyectos markers
     if (projectsLayer.current && Array.isArray(projects)) {
-      const projMarkers = projects.map(p => {
+      const projMarkers = projects.filter(p => p.hasCoords && isValidCoord(p.latitud, p.longitud)).map(p => {
         const m = L.marker([p.latitud, p.longitud], {
           draggable: !!editMode,
           icon: L.divIcon({ className: 'proyecto-marker', html: markerHtml('#a855f7', 'P'), iconSize: [18,18], iconAnchor:[9,9], popupAnchor:[0,-12] })
@@ -218,7 +243,7 @@ export default function MapaViviendas() {
             try {
               await adminApi.actualizarProyecto(id, { latitud: ll.lat, longitud: ll.lng });
               // Actualizar estado local
-              setProjects(prev => prev.map(pp => (pp.id === id || pp.id_proyecto === id) ? { ...pp, latitud: ll.lat, longitud: ll.lng } : pp));
+              setProjects(prev => prev.map(pp => (pp.id === id || pp.id_proyecto === id) ? { ...pp, latitud: ll.lat, longitud: ll.lng, hasCoords: true } : pp));
             } catch (err) {
               console.warn('No se pudo guardar nueva ubicación del proyecto:', err?.message);
             }
@@ -318,36 +343,76 @@ export default function MapaViviendas() {
                         <div key={`proj-${pid || p.nombre}`} className="w-full transition-all">
                           <button
                             onClick={() => {
-                              if (mapInstance.current) mapInstance.current.setView([p.latitud, p.longitud], 15);
-                              setSelectedProjectId(prev => prev === pid ? null : pid);
+                              // Selección de proyecto y ajuste de vista
+                              const nextSelected = selectedProjectId === pid ? null : pid;
+                              setSelectedProjectId(nextSelected);
+                              if (mapInstance.current && nextSelected) {
+                                if (p.hasCoords) {
+                                  mapInstance.current.setView([p.latitud, p.longitud], 15);
+                                } else {
+                                  // Fallback: centrar en viviendas del proyecto si existen, si no vista país
+                                  const vivs = (data || []).filter(v => (v.id_proyecto ?? v.proyecto_id) === pid);
+                                  if (vivs.length) {
+                                    try {
+                                      const group = L.featureGroup(vivs.map(v => L.marker([v.latitud, v.longitud])));
+                                      mapInstance.current.fitBounds(group.getBounds().pad(0.2));
+                                    } catch {
+                                      mapInstance.current.setView([-33.45, -70.66], 6);
+                                    }
+                                  } else {
+                                    mapInstance.current.setView([-33.45, -70.66], 6);
+                                  }
+                                }
+                              }
                             }}
                             className={`w-full flex items-center justify-between text-left px-2 py-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-sm transition-colors ${isOpen ? 'bg-gray-50 dark:bg-gray-800 ring-1 ring-gray-200 dark:ring-gray-700' : ''}`}
                           >
                             <span className="truncate">
                               {p?.nombre || '(Proyecto)'} — {p?.ubicacion || '(Sin ubicación)'}
                             </span>
-                            <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold bg-purple-600 text-white hover:bg-purple-500 transition-colors">
-                              <MapPinIcon className="h-3.5 w-3.5" /> proyecto
+                            <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold transition-colors ${p.hasCoords ? 'bg-purple-600 text-white hover:bg-purple-500' : 'bg-gray-400 text-white hover:bg-gray-500'}`}>
+                              <MapPinIcon className="h-3.5 w-3.5" /> {p.hasCoords ? 'proyecto' : 'sin coords'}
                             </span>
                           </button>
                           {isOpen && viviendasDeProyecto.length > 0 && (
                             <div className="ml-3 mt-1 space-y-1">
                               <div className="text-[10px] uppercase text-gray-400">Viviendas del proyecto</div>
-                              {viviendasDeProyecto.map(d => (
-                                <button key={`viv-in-proj-${d.id_vivienda}`}
-                                  onClick={() => { if (mapInstance.current) mapInstance.current.setView([d.latitud, d.longitud], 16); }}
-                                  className="w-full flex items-center justify-between text-left px-2 py-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-[12px] transition-all hover:translate-x-0.5"
-                                >
-                                  <span className="truncate">
-                                    {d?.direccion_normalizada || d?.direccion || '(Sin dirección)'}
-                                  </span>
-                                  {(() => { const s = estadoChip(d.estado); const I = s.Icon; return (
-                                    <span className={s.className} title={`Estado: ${s.label}`}>
-                                      <I className="h-3.5 w-3.5" /> {s.label}
-                                    </span>
-                                  ) })()}
-                                </button>
-                              ))}
+                              {viviendasDeProyecto.map(d => {
+                                const isOpenViv = expandedHousingId === d.id_vivienda;
+                                const a = splitAddress(d?.direccion_normalizada || d?.direccion);
+                                const canCenter = isValidCoord(d.latitud, d.longitud);
+                                return (
+                                  <div key={`viv-in-proj-${d.id_vivienda}`} className="w-full">
+                                    <button
+                                      onClick={() => {
+                                        setExpandedHousingId(prev => prev === d.id_vivienda ? null : d.id_vivienda);
+                                        if (mapInstance.current && canCenter) mapInstance.current.setView([d.latitud, d.longitud], 16);
+                                      }}
+                                      className="w-full flex items-center justify-between text-left px-2 py-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-[12px] transition-all hover:translate-x-0.5"
+                                      title={(d?.direccion_normalizada || d?.direccion || '').toString()}
+                                    >
+                                      <span className="truncate">
+                                        {d?.direccion_normalizada || d?.direccion || '(Sin dirección)'}
+                                      </span>
+                                      {(() => { const s = estadoChip(d.estado); const I = s.Icon; return (
+                                        <span className={s.className} title={`Estado: ${s.label}`}>
+                                          <I className="h-3.5 w-3.5" /> {s.label}
+                                        </span>
+                                      ) })()}
+                                    </button>
+                                    {isOpenViv && (
+                                      <div className="ml-2 pl-2 mt-1 border-l border-gray-200 dark:border-gray-700 text-[11px] text-gray-600 dark:text-gray-300 space-y-0.5">
+                                        <div><span className="font-medium">Calle:</span> {a.calleNumero}</div>
+                                        <div><span className="font-medium">Comuna:</span> {a.comuna}</div>
+                                        <div><span className="font-medium">Región:</span> {a.region}</div>
+                                        {isValidCoord(d.latitud, d.longitud) && (
+                                          <div><span className="font-medium">Coords:</span> {Number(d.latitud).toFixed(5)}, {Number(d.longitud).toFixed(5)}</div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
                             </div>
                           )}
                         </div>

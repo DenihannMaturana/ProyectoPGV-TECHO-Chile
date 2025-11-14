@@ -154,6 +154,20 @@ export default function GestionProyectos() {
     loadData();
   }, []);
 
+  // Bloquear scroll del body cuando el modal esté abierto
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const prev = document.body.style.overflow;
+    if (showModal) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = prev || '';
+    }
+    return () => {
+      document.body.style.overflow = prev || '';
+    };
+  }, [showModal]);
+
   async function loadData() {
     setLoading(true);
     setError("");
@@ -707,8 +721,8 @@ export default function GestionProyectos() {
         </SectionPanel>
 
         {showModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white dark:bg-gray-900 rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto overscroll-contain p-6">
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center p-4 sm:p-6 z-50 overflow-y-auto">
+            <div className="my-6 sm:my-10 bg-white dark:bg-gray-900 rounded-lg w-full sm:max-w-4xl max-h-[90vh] overflow-y-auto overscroll-contain p-4 sm:p-6 shadow-xl">
               <h3 className="text-lg font-semibold mb-4">
                 {modalType === "crear"
                   ? "Crear Nuevo Proyecto"
