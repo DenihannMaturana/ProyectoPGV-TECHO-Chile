@@ -4,7 +4,7 @@ import React from 'react';
  * StatCard: indicador resumido.
  * accent: define combinaciones de color para el ícono (rol / contexto)
  */
-export function StatCard({ icon, label, value, subtitle, accent = 'blue', ariaLabel }) {
+export function StatCard({ icon, label, value, subtitle, accent = 'blue', ariaLabel, onClick }) {
   const accentMap = {
     blue: { bg: 'bg-techo-blue-50 dark:bg-techo-blue-500/15', text: 'text-techo-blue-600 dark:text-techo-blue-300' },
     orange: { bg: 'bg-orange-50 dark:bg-orange-500/15', text: 'text-orange-600 dark:text-orange-300' },
@@ -16,8 +16,10 @@ export function StatCard({ icon, label, value, subtitle, accent = 'blue', ariaLa
     cyan: { bg: 'bg-cyan-50 dark:bg-cyan-500/15', text: 'text-cyan-600 dark:text-cyan-300' }
   };
   const colors = accentMap[accent] || accentMap.blue;
+  const clickable = typeof onClick === 'function'
+  const baseClass = `card-surface p-4 sm:p-5 flex items-center gap-4 ${clickable ? 'cursor-pointer hover:bg-white/60 dark:hover:bg-gray-800/60 transition-colors' : ''}`
   return (
-    <div className="card-surface p-4 sm:p-5 flex items-center gap-4" aria-label={ariaLabel || label}>
+    <div className={baseClass} aria-label={ariaLabel || label} onClick={onClick} role={clickable ? 'button' : undefined} tabIndex={clickable ? 0 : undefined}>
       <div className={`p-3 rounded-lg text-xl ${colors.bg} ${colors.text}`} aria-hidden>
         {icon}
       </div>

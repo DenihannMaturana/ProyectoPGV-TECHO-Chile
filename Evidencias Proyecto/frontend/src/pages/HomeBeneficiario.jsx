@@ -125,6 +125,8 @@ export default function HomeBeneficiario() {
   const [success, setSuccess] = useState("");
   const [vivData, setVivData] = useState(null); // { vivienda, proyecto, recepcion_activa, flags }
   const [incidencias, setIncidencias] = useState([]);
+  const [perfil, setPerfil] = useState(null);
+  const [editPerfil, setEditPerfil] = useState({ editing: false, telefono: '' });
   const fileInputRef = React.useRef(null);
   const [uploadTarget, setUploadTarget] = useState(null);
   const [detailInc, setDetailInc] = useState(null);
@@ -163,6 +165,13 @@ export default function HomeBeneficiario() {
       setVivData(v.data || null);
     } catch (e) {
       setError(e.message || "No se pudo cargar la vivienda");
+    }
+    try {
+      const p = await beneficiarioApi.perfil();
+      setPerfil(p.data || null);
+      setEditPerfil((prev) => ({ ...prev, telefono: (p.data?.telefono || '') }));
+    } catch (e) {
+      console.warn('Perfil:', e.message)
     }
     try {
       const incs = await beneficiarioApi.listarIncidencias(3, 0)
@@ -938,26 +947,97 @@ export default function HomeBeneficiario() {
               </div>
             </div>
           </SectionPanel>
-          <SectionPanel
-            title="Consejos rápidos"
-            description="Cuidado preventivo de tu vivienda"
-            variant="highlight"
-            showBack={false}
-          >
-            <ul className="text-sm text-techo-gray-700 space-y-3" aria-label="Lista de consejos">
-              {[
-                { icon: '💨', text: 'Ventila tu hogar diariamente para evitar humedad.' },
-                { icon: '🔌', text: 'Revisa periódicamente las instalaciones eléctricas.' },
-                { icon: '🚨', text: 'Reporta cualquier problema inmediatamente.' },
-                { icon: '🧼', text: 'Mantén limpios los desagües y canaletas.' }
-              ].map((c,i) => (
-                <li key={i} className="flex items-start gap-3">
-                  <span className="text-lg leading-none" aria-hidden>{c.icon}</span>
-                  <span className="leading-snug">{c.text}</span>
-                </li>
-              ))}
-            </ul>
-          </SectionPanel>
+          <div className="space-y-8">
+            <SectionPanel
+              title="Mi Usuario"
+              description="Datos de contacto y cuenta"
+              showBack={false}
+            >
+              <div className="text-sm space-y-4">
+                <div className="grid grid-cols-1 gap-3">
+                  <div>
+                    <p className="text-xs text-slate-500">Nombre</p>
+                    <p className="font-medium">{perfil?.nombre || user?.nombre || '—'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500">Email</p>
+                    <p className="font-medium break-all">{perfil?.email || user?.email || '—'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500">RUT</p>
+                    <p className="font-medium">{perfil?.rut || '—'}</p>
+                  </div>
+                </div>
+                <div className="pt-2">
+                  <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">Teléfono de contacto</label>
+                  {!editPerfil.editing ? (
+                    <div className="flex items-center justify-between">
+                      <p className="text-slate-800 dark:text-slate-100">{perfil?.telefono || 'No registrado'}</p>
+                      <button className="btn-outline btn-sm" onClick={() => setEditPerfil({ editing: true, telefono: perfil?.telefono || '' })}>Editar</button>
+                    </div>
+                  ) : (
+                    <form
+                      className="space-y-2"
+                      onSubmit={async (e) => {
+                        e.preventDefault()
+                        const raw = (editPerfil.telefono || '').toString()
+                        const cleaned = raw.replace(/[^\d+]/g, '')
+                        if (cleaned && (cleaned.replace(/\D/g,'').length < 8 || cleaned.replace(/\D/g,'').length > 15)) {
+                          setError('Teléfono inválido: use entre 8 y 15 dígitos')
+                          return
+                        }
+                        try {
+                          setLoading(true); setError('');
+                          const resp = await beneficiarioApi.actualizarPerfil({ telefono: cleaned || null })
+                          setPerfil(resp.data || { ...perfil, telefono: cleaned || null })
+                          setSuccess('Teléfono actualizado')
+                          setEditPerfil({ editing: false, telefono: cleaned || '' })
+                        } catch (err) {
+                          setError(err.message || 'No se pudo actualizar el teléfono')
+                        } finally {
+                          setLoading(false)
+                        }
+                      }}
+                    >
+                      <input
+                        type="tel"
+                        inputMode="tel"
+                        placeholder="+56912345678"
+                        className="w-full rounded-md border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/60 px-3 py-2 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
+                        value={editPerfil.telefono}
+                        onChange={(e) => setEditPerfil(prev => ({ ...prev, telefono: e.target.value }))}
+                      />
+                      <div className="flex justify-end gap-2">
+                        <button type="button" className="btn-outline btn-sm" onClick={() => setEditPerfil({ editing: false, telefono: perfil?.telefono || '' })}>Cancelar</button>
+                        <button type="submit" className="btn-primary btn-sm">Guardar</button>
+                      </div>
+                    </form>
+                  )}
+                </div>
+              </div>
+            </SectionPanel>
+
+            <SectionPanel
+              title="Consejos rápidos"
+              description="Cuidado preventivo de tu vivienda"
+              variant="highlight"
+              showBack={false}
+            >
+              <ul className="text-sm text-techo-gray-700 space-y-3" aria-label="Lista de consejos">
+                {[
+                  { icon: '💨', text: 'Ventila tu hogar diariamente para evitar humedad.' },
+                  { icon: '🔌', text: 'Revisa periódicamente las instalaciones eléctricas.' },
+                  { icon: '🚨', text: 'Reporta cualquier problema inmediatamente.' },
+                  { icon: '🧼', text: 'Mantén limpios los desagües y canaletas.' }
+                ].map((c,i) => (
+                  <li key={i} className="flex items-start gap-3">
+                    <span className="text-lg leading-none" aria-hidden>{c.icon}</span>
+                    <span className="leading-snug">{c.text}</span>
+                  </li>
+                ))}
+              </ul>
+            </SectionPanel>
+          </div>
         </div>
 
         {/* Garantías DS49: información clave para el beneficiario */}

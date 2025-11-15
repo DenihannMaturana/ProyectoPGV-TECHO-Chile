@@ -67,19 +67,24 @@ export async function getDashboardStats(req, res) {
     // Obtener estadísticas de viviendas
     const housingStats = await getHousingStats();
 
-    // Contar incidencias abiertas
+    // Contar incidencias abiertas y cerradas (resueltas/cerradas/descartadas)
     let incidenciasAbiertas = 0;
+    let incidenciasCerradas = 0;
     try {
       const { data: incData, error: errInc } = await supabase
         .from("incidencias")
         .select("estado");
 
       if (!errInc && incData) {
-        incidenciasAbiertas = incData.filter((i) =>
-          ["abierta", "open", "pendiente"].includes(
-            (i.estado || "").toLowerCase()
-          )
-        ).length;
+        const toLower = (s) => String(s || '').toLowerCase();
+        incidenciasAbiertas = incData.filter((i) => {
+          const st = toLower(i.estado);
+          return ["abierta", "en_proceso", "en_espera", "open", "pendiente"].includes(st);
+        }).length;
+        incidenciasCerradas = incData.filter((i) => {
+          const st = toLower(i.estado);
+          return ["cerrada", "resuelta", "descartada", "closed"].includes(st);
+        }).length;
       }
     } catch (error) {
       console.warn("Error contando incidencias (continuando):", error.message);
@@ -95,6 +100,7 @@ export async function getDashboardStats(req, res) {
         viviendas: housingStats,
         incidencias: {
           abiertas: incidenciasAbiertas,
+          cerradas: incidenciasCerradas,
         },
       },
     });

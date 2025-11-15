@@ -81,6 +81,12 @@ export const beneficiarioApi = {
   vivienda() {
     return request('/api/beneficiario/vivienda');
   },
+  perfil() {
+    return request('/api/beneficiario/perfil');
+  },
+  actualizarPerfil(payload) {
+    return request('/api/beneficiario/perfil', { method: 'PUT', body: JSON.stringify(payload) });
+  },
   recepcionResumen() {
     return request('/api/beneficiario/recepcion');
   },

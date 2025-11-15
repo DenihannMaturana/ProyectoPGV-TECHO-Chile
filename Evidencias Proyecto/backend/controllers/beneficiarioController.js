@@ -10,6 +10,8 @@ import { listTemplatePlans } from '../services/MediaService.js'
 import { getIncidencesByBeneficiary, createIncidence, computePriority, logIncidenciaEvent } from '../models/Incidence.js'
 import { calcularFechasLimite, obtenerGarantiaPorCategoria, calcularVencimientoGarantia, estaGarantiaVigente, computePriorityFromCategory } from '../utils/posventaConfig.js'
 import { calcularEstadoPlazos } from '../utils/plazosLegales.js'
+import { getUserById, updateUser } from '../models/User.js'
+import auditMiddleware from '../middleware/auditMiddleware.js'
 
 /**
  * Health check para rutas de beneficiario
@@ -20,6 +22,76 @@ export async function beneficiaryHealth(req, res) {
     area: 'beneficiario', 
     status: 'ok' 
   })
+}
+
+/**
+ * Perfil del beneficiario: obtener datos básicos
+ */
+export async function getMyProfile(req, res) {
+  try {
+    const uid = req.user?.uid || req.user?.sub
+    if (!uid) return res.status(401).json({ success:false, message:'No autenticado' })
+    const data = await getUserById(uid)
+    return res.json({ success:true, data })
+  } catch (error) {
+    console.error('Error getMyProfile:', error)
+    return res.status(500).json({ success:false, message:'Error al obtener el perfil' })
+  }
+}
+
+/**
+ * Perfil del beneficiario: actualizar datos permitidos (telefono, direccion)
+ */
+export async function updateMyProfile(req, res) {
+  try {
+    const uid = req.user?.uid || req.user?.sub
+    if (!uid) return res.status(401).json({ success:false, message:'No autenticado' })
+    const { telefono, direccion } = req.body || {}
+
+    const updates = {}
+    if (typeof telefono !== 'undefined') {
+      if (telefono === null || telefono === '') {
+        updates.telefono = null
+      } else if (typeof telefono === 'string') {
+        // Permitir solo dígitos y +, longitud razonable 8-15
+        const cleaned = telefono.replace(/[^\d+]/g, '')
+        if (cleaned && (cleaned.replace(/\D/g, '').length < 8 || cleaned.replace(/\D/g, '').length > 15)) {
+          return res.status(400).json({ success:false, message:'Teléfono inválido (use 8 a 15 dígitos)' })
+        }
+        updates.telefono = cleaned || null
+      } else {
+        return res.status(400).json({ success:false, message:'Formato de teléfono inválido' })
+      }
+    }
+    if (typeof direccion !== 'undefined') {
+      if (direccion === null || direccion === '') updates.direccion = null
+      else if (typeof direccion === 'string') updates.direccion = direccion.trim()
+      else return res.status(400).json({ success:false, message:'Formato de dirección inválido' })
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ success:false, message:'No hay cambios para actualizar' })
+    }
+
+    const updated = await updateUser(uid, updates)
+
+    // Audit log (no bloquear si falla)
+    await auditMiddleware.logAudit({
+      req,
+      actor_uid: uid,
+      actor_email: req.user?.email || null,
+      actor_rol: req.user?.rol || null,
+      action: 'beneficiario.perfil.update',
+      entity_type: 'user',
+      entity_id: uid,
+      details: { fields: Object.keys(updates) }
+    })
+
+    return res.json({ success:true, data: updated, message: 'Perfil actualizado' })
+  } catch (error) {
+    console.error('Error updateMyProfile:', error)
+    return res.status(500).json({ success:false, message:'Error al actualizar el perfil' })
+  }
 }
 
 /**

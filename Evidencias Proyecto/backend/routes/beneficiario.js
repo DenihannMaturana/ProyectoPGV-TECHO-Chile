@@ -14,7 +14,9 @@ import {
   getMyIncidences,
   createNewIncidence,
   getIncidenceDetail,
-  validateIncidence
+  validateIncidence,
+  getMyProfile,
+  updateMyProfile
 } from '../controllers/beneficiarioController.js'
 import { 
   getPosventaForm, 
@@ -41,6 +43,10 @@ router.get('/health', beneficiaryHealth)
 
 // Información de la vivienda asignada
 router.get('/vivienda', getMyHousing)
+
+// Perfil beneficiario
+router.get('/perfil', getMyProfile)
+router.put('/perfil', updateMyProfile)
 
 // Información de recepción de la vivienda
 router.get('/recepcion', getMyReception)

@@ -4,6 +4,7 @@ import { AuthContext } from "../context/AuthContext";
 import { StatCard } from "../components/ui/StatCard";
 import { ActionCard } from "../components/ui/ActionCard";
 import { SectionPanel } from "../components/ui/SectionPanel";
+import { Modal } from "../components/ui/Modal";
 import { DashboardLayout } from "../components/ui/DashboardLayout";
 import {
   UsersIcon,
@@ -14,7 +15,7 @@ import {
   ShieldCheckIcon,
 } from "@heroicons/react/24/outline";
 import { ArrowPathIcon } from "@heroicons/react/24/solid";
-import { adminApi } from "../services/api";
+import { adminApi, tecnicoApi } from "../services/api";
 
 // Utilidad: tiempo relativo en español (e.g., "hace 1 hora")
 function getRelativeTimeString(dateInput, locale = 'es') {
@@ -92,6 +93,33 @@ export default function HomeAdministrador() {
     error: null,
   });
 
+  // Modal de resumen (usuarios, viviendas, incidencias)
+  const [overview, setOverview] = useState({ open: false, type: null, items: [], loading: false, error: '', title: '' })
+  const openOverview = async (type) => {
+    const titles = {
+      usuarios: 'Todos los usuarios',
+      viviendas: 'Todas las viviendas',
+      incidencias: 'Incidencias'
+    }
+    setOverview({ open: true, type, items: [], loading: true, error: '', title: titles[type] || '' })
+    try {
+      let items = []
+      if (type === 'usuarios') {
+        const res = await adminApi.listarUsuarios()
+        items = Array.isArray(res.data) ? res.data : (res || [])
+      } else if (type === 'viviendas') {
+        const res = await adminApi.listarViviendas()
+        items = Array.isArray(res.data) ? res.data : (res || [])
+      } else if (type === 'incidencias') {
+        const res = await tecnicoApi.listarIncidencias({ limit: 50, offset: 0, includeMedia: false })
+        items = Array.isArray(res.data) ? res.data : (res || [])
+      }
+      setOverview(prev => ({ ...prev, items, loading: false }))
+    } catch (e) {
+      setOverview(prev => ({ ...prev, loading: false, error: e.message || 'No se pudo cargar' }))
+    }
+  }
+
   useEffect(() => {
     let cancelled = false;
     async function loadStats() {
@@ -154,11 +182,11 @@ export default function HomeAdministrador() {
       accent: "cyan",
     },
     {
-      title: "KPIs y Métricas",
+      title: "Gráficos del Sistema",
       description: "Visualizaciones y análisis detallado",
       badge: "Gráficos",
       to: "/admin/kpis",
-      action: () => handleNavigation("/admin/kpis", "KPIs"),
+      action: () => handleNavigation("/admin/kpis", "Gráficos"),
       icon: <ChartBarIcon className={iconSize} />,
       accent: "pink",
     },
@@ -344,6 +372,7 @@ export default function HomeAdministrador() {
                     } Tec / ${stats.usuarios.beneficiario || 0} Ben`
               }
               accent="blue"
+              onClick={() => openOverview('usuarios')}
             />
             <StatCard
               icon={<HomeModernIcon className={iconSize} />}
@@ -351,6 +380,7 @@ export default function HomeAdministrador() {
               value={stats.loading ? "—" : stats.viviendas.total}
               subtitle={stats.loading ? "Cargando" : "Registradas"}
               accent="green"
+              onClick={() => openOverview('viviendas')}
             />
             <StatCard
               icon={<WrenchScrewdriverIcon className={iconSize} />}
@@ -358,6 +388,7 @@ export default function HomeAdministrador() {
               value={stats.loading ? "—" : stats.incidencias.abiertas}
               subtitle={stats.loading ? "Cargando" : "Abiertas"}
               accent="orange"
+              onClick={() => openOverview('incidencias')}
             />
           </div>
         </div>
@@ -493,6 +524,72 @@ export default function HomeAdministrador() {
         </SectionPanel>
         {/* Se eliminó el bloque inline de KPIs. Ahora solo se accede vía la tarjeta 'KPIs y Métricas'. */}
       </div>
+
+      {/* Modal de resumen */}
+      <Modal isOpen={overview.open} onClose={() => setOverview({ open:false, type:null, items:[], loading:false, error:'', title:'' })} maxWidth="max-w-3xl">
+        <div className="p-5">
+          <div className="flex items-start justify-between">
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">{overview.title}</h3>
+            <button className="btn-outline btn-sm" onClick={() => setOverview({ open:false, type:null, items:[], loading:false, error:'', title:'' })}>Cerrar</button>
+          </div>
+          {overview.loading && <p className="text-sm text-slate-500 mt-3">Cargando…</p>}
+          {overview.error && <p className="text-sm text-red-500 mt-3">{overview.error}</p>}
+          {!overview.loading && !overview.error && (
+            <div className="mt-4">
+              {overview.type === 'usuarios' && (
+                <ul className="divide-y divide-slate-200 dark:divide-slate-700">
+                  {(overview.items || []).slice(0, 50).map((u) => (
+                    <li key={u.uid} className="py-2 flex items-center justify-between text-sm">
+                      <div className="min-w-0">
+                        <p className="font-medium text-slate-900 dark:text-white truncate">{u.nombre || '(sin nombre)'} <span className="text-slate-500 ml-1">({u.email})</span></p>
+                        <p className="text-xs text-slate-500">RUT: {u.rut || '—'}</p>
+                      </div>
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200">{u.rol}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {overview.type === 'viviendas' && (
+                <ul className="divide-y divide-slate-200 dark:divide-slate-700">
+                  {(overview.items || []).slice(0, 50).map((v) => (
+                    <li key={v.id_vivienda || v.id} className="py-2 text-sm flex items-center justify-between">
+                      <div className="min-w-0 pr-3">
+                        <p className="font-medium text-slate-900 dark:text-white truncate">#{v.id_vivienda || v.id} · {v.direccion || 'Sin dirección'}</p>
+                        <p className="text-xs text-slate-500">Proyecto: {v.id_proyecto || v.proyecto_id || '—'}</p>
+                      </div>
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200">{v.estado || '—'}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {overview.type === 'incidencias' && (
+                <ul className="divide-y divide-slate-200 dark:divide-slate-700">
+                  {(overview.items || []).slice(0, 50).map((i) => (
+                    <li key={i.id_incidencia} className="py-2 text-sm flex items-center justify-between">
+                      <div className="min-w-0 pr-3">
+                        <p className="font-medium text-slate-900 dark:text-white truncate">#{i.id_incidencia} · {i.categoria || 'General'}</p>
+                        <p className="text-xs text-slate-500">Vivienda: {i.id_vivienda || '—'} · Prioridad: {(i.prioridad || '').toUpperCase()}</p>
+                      </div>
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200">{i.estado}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="mt-4 flex justify-end gap-2">
+                {overview.type === 'usuarios' && (
+                  <button className="btn-primary btn-sm" onClick={() => { navigate('/admin/usuarios'); setOverview(prev=>({ ...prev, open:false })) }}>Ver usuarios</button>
+                )}
+                {overview.type === 'viviendas' && (
+                  <button className="btn-primary btn-sm" onClick={() => { navigate('/admin/viviendas'); setOverview(prev=>({ ...prev, open:false })) }}>Ver viviendas</button>
+                )}
+                {overview.type === 'incidencias' && (
+                  <button className="btn-primary btn-sm" onClick={() => { navigate('/home/incidencias'); setOverview(prev=>({ ...prev, open:false })) }}>Ver incidencias</button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </Modal>
     </DashboardLayout>
   );
 }

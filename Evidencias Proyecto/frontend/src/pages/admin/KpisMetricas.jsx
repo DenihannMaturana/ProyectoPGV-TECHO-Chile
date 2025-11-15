@@ -233,14 +233,14 @@ export default function KpisMetricas() {
 
   return (
     <DashboardLayout
-      title="KPIs y Métricas"
+      title="Gráficos del Sistema"
       subtitle={`Análisis en tiempo casi real · Usuario: ${user?.nombre || user?.email || ''}`}
       user={user || {}}
       onLogout={logout}
       accent="pink"
-      footer={`© ${new Date().getFullYear()} TECHO – KPIs`}
+      footer={`© ${new Date().getFullYear()} TECHO – Gráficos`}
     >
-      <div className="space-y-6" role="region" aria-label="KPIs y métricas administrativas">
+      <div className="space-y-6" role="region" aria-label="Gráficos del sistema">
         {/* Header Section */}
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex flex-col gap-4">
