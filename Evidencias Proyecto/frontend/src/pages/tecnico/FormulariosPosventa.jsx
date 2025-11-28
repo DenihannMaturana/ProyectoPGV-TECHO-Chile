@@ -329,7 +329,14 @@ export default function FormulariosPosventa() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-100">
-                {formularios.map((form) => (
+                {formularios.map((form) => {
+                  const problemasCount = typeof form.items_no_ok_count === 'number'
+                    ? form.items_no_ok_count
+                    : (Array.isArray(form.items) ? form.items.filter(i => !i.ok).length : 0)
+                  const observacionesCount = typeof form.observaciones_count === 'number'
+                    ? form.observaciones_count
+                    : (Array.isArray(form.observaciones) ? form.observaciones.length : 0)
+                  return (
                   <tr key={form.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div>
@@ -366,11 +373,11 @@ export default function FormulariosPosventa() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm">
-                        <div className={`font-medium ${getPrioridadColor(form.items_no_ok_count)}`}>
-                          {form.items_no_ok_count} problemas
+                        <div className={`font-medium ${getPrioridadColor(problemasCount)}`}>
+                          {problemasCount} problema{problemasCount === 1 ? '' : 's'}
                         </div>
                         <div className="text-gray-500 text-xs">
-                          {form.observaciones_count} observaciones
+                          {observacionesCount} observación{observacionesCount === 1 ? '' : 'es'}
                         </div>
                       </div>
                     </td>
@@ -415,7 +422,7 @@ export default function FormulariosPosventa() {
                       )}
                     </td>
                   </tr>
-                ))}
+                )})}
               </tbody>
             </table>
           </div>

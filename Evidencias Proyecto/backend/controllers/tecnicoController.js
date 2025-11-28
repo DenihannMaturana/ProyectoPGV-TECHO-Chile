@@ -1211,7 +1211,30 @@ export async function listPosventaForms(req, res) {
     const { data, error, count } = await query
     if (error) throw error
 
-    // Mapear a estructura esperada por el frontend
+    // Reforzar conteo de items no OK si la columna pre-calculada viene nula o desactualizada
+    let itemsCountMap = {}
+    try {
+      const formIds = (data || []).map(r => r.id)
+      if (formIds.length) {
+        const { data: itemsRows, error: itemsError } = await supabase
+          .from('vivienda_postventa_item')
+          .select('form_id, ok')
+          .in('form_id', formIds)
+        if (!itemsError && itemsRows) {
+          itemsRows.forEach(row => {
+            if (!itemsCountMap[row.form_id]) {
+              itemsCountMap[row.form_id] = { total: 0, noOk: 0 }
+            }
+            itemsCountMap[row.form_id].total++
+            if (!row.ok) itemsCountMap[row.form_id].noOk++
+          })
+        }
+      }
+    } catch (errItems) {
+      console.warn('No se pudieron recalcular conteos de items:', errItems?.message || errItems)
+    }
+
+    // Mapear a estructura esperada por el frontend combinando conteos calculados
     const mapped = (data || []).map(row => ({
       id: row.id,
       estado: row.estado,
@@ -1227,7 +1250,13 @@ export async function listPosventaForms(req, res) {
         tipo: row.viviendas?.tipo_vivienda || null,
         proyecto: row.viviendas?.proyecto?.nombre || '—'
       },
-      items_no_ok_count: row.items_no_ok_count ?? null,
+      items_no_ok_count: (() => {
+        const pre = row.items_no_ok_count
+        const calc = itemsCountMap[row.id]?.noOk
+        // Usar cálculo si pre viene nulo o es 0 pero hay problemas
+        if ((pre == null || pre === 0) && typeof calc === 'number' && calc > 0) return calc
+        return pre ?? (typeof calc === 'number' ? calc : 0)
+      })(),
       observaciones_count: row.observaciones_count ?? null,
       pdf: {
         existe: !!row.pdf_path,
@@ -1487,7 +1516,11 @@ export async function reviewPosventaForm(req, res) {
     console.log('📋 Total items en formulario:', items?.length)
     console.log('📋 Items completos:', JSON.stringify(items, null, 2))
     
-    const problemItems = (items || []).filter(i => !i.ok && (i.crear_incidencia !== false))
+    // Determinar problemas de forma tolerante: solo consideramos OK si es estrictamente true
+    const problemItems = (items || []).filter(i => {
+      const isOk = i.ok === true // evita que strings 'false' pasen como true
+      return !isOk && (i.crear_incidencia !== false)
+    })
     console.log('⚠️  Problem items detectados:', problemItems.length)
     console.log('⚠️  Problem items:', JSON.stringify(problemItems.map(i => ({
       item: i.item,
