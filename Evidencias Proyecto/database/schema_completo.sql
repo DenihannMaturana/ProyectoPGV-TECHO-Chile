@@ -143,33 +143,6 @@ CREATE TABLE IF NOT EXISTS incidencia_historial (
 );
 
 -- ========================================
--- RECEPCIONES DE VIVIENDA
--- ========================================
-CREATE TABLE IF NOT EXISTS vivienda_recepcion (
-    id BIGSERIAL PRIMARY KEY,
-    id_vivienda BIGINT NOT NULL REFERENCES viviendas(id_vivienda) ON DELETE CASCADE,
-    beneficiario_uid BIGINT NOT NULL REFERENCES usuarios(uid) ON DELETE RESTRICT,
-    tecnico_uid BIGINT REFERENCES usuarios(uid) ON DELETE SET NULL,
-    estado TEXT NOT NULL CHECK (estado IN ('borrador','enviada','revisada')),
-    fecha_creada TIMESTAMPTZ NOT NULL DEFAULT now(),
-    fecha_enviada TIMESTAMPTZ,
-    fecha_revisada TIMESTAMPTZ,
-    observaciones_count INT NOT NULL DEFAULT 0,
-    comentario_tecnico TEXT
-);
-
-CREATE TABLE IF NOT EXISTS vivienda_recepcion_item (
-    id BIGSERIAL PRIMARY KEY,
-    recepcion_id BIGINT NOT NULL REFERENCES vivienda_recepcion(id) ON DELETE CASCADE,
-    categoria TEXT NOT NULL,
-    item TEXT NOT NULL,
-    ok BOOLEAN NOT NULL,
-    comentario TEXT,
-    fotos_json JSONB DEFAULT '[]'::jsonb,
-    orden INT
-);
-
--- ========================================
 -- FORMULARIOS DE POSTVENTA
 -- ========================================
 CREATE TABLE IF NOT EXISTS vivienda_postventa_form (
@@ -303,11 +276,6 @@ CREATE INDEX IF NOT EXISTS idx_incidencias_garantia ON incidencias(garantia_tipo
 -- Historial
 CREATE INDEX IF NOT EXISTS idx_historial_incidencia ON incidencia_historial(incidencia_id);
 CREATE INDEX IF NOT EXISTS idx_historial_fecha ON incidencia_historial(created_at DESC);
-
--- Recepciones
-CREATE INDEX IF NOT EXISTS idx_recepcion_vivienda ON vivienda_recepcion(id_vivienda);
-CREATE INDEX IF NOT EXISTS idx_recepcion_beneficiario ON vivienda_recepcion(beneficiario_uid);
-CREATE INDEX IF NOT EXISTS idx_recepcion_item_recepcion ON vivienda_recepcion_item(recepcion_id);
 
 -- Postventa
 CREATE INDEX IF NOT EXISTS idx_postventa_vivienda ON vivienda_postventa_form(id_vivienda);

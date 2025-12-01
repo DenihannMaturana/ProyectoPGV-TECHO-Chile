@@ -21,6 +21,7 @@ export default function GestionViviendas() {
   const [showAssignModal, setShowAssignModal] = useState(false)
   const [selectedForAssign, setSelectedForAssign] = useState(null)
   const [assignForm, setAssignForm] = useState({ beneficiario_uid: '' })
+  const [forzarEntrega, setForzarEntrega] = useState(false)
   const [form, setForm] = useState({
     direccion: '',
     proyecto_id: '',
@@ -133,6 +134,7 @@ export default function GestionViviendas() {
   const closeModal = () => {
     setShowModal(false)
     setSelectedVivienda(null)
+    setForzarEntrega(false)
     resetForm()
   }
 
@@ -182,7 +184,8 @@ export default function GestionViviendas() {
         metros_cuadrados: form.metros_cuadrados ? parseInt(form.metros_cuadrados) : null,
         numero_habitaciones: form.numero_habitaciones ? parseInt(form.numero_habitaciones) : null,
         numero_banos: form.numero_banos ? parseInt(form.numero_banos) : null,
-        proyecto_id: form.proyecto_id || null
+        proyecto_id: form.proyecto_id || null,
+        forzar_entrega: forzarEntrega
       }
 
       if (modalType === 'crear') {
@@ -594,13 +597,29 @@ export default function GestionViviendas() {
                     >
                       <option value="planificada">Planificada</option>
                       <option value="en_construccion">En Construcción</option>
-                      <option value="construida">Construida</option>
-                      <option value="lista_para_entregar">Lista para Entregar</option>
                       <option value="asignada">Asignada</option>
-                      <option value="entregada_inicial">Entregada (inicial)</option>
-                      <option value="entregada_definitiva">Entregada (definitiva)</option>
-                      {/* No mostramos 'entregada' legacy para nuevas ediciones/creaciones */}
+                      <option value="entregada">Entregada</option>
                     </select>
+                    
+                    {modalType !== 'crear' && form.estado === 'entregada' && (
+                      <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id="forzarEntrega"
+                            checked={forzarEntrega}
+                            onChange={(e) => setForzarEntrega(e.target.checked)}
+                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                          />
+                          <label htmlFor="forzarEntrega" className="text-sm text-gray-700 font-medium">
+                            Forzar entrega sin validar recepción conforme
+                          </label>
+                        </div>
+                        <p className="text-xs text-gray-600 mt-1 ml-6">
+                          Marcar para entregar sin recepción aprobada y generar formulario de postventa.
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   <div>

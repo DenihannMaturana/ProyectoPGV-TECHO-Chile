@@ -87,21 +87,6 @@ export const beneficiarioApi = {
   actualizarPerfil(payload) {
     return request('/api/beneficiario/perfil', { method: 'PUT', body: JSON.stringify(payload) });
   },
-  recepcionResumen() {
-    return request('/api/beneficiario/recepcion');
-  },
-  recepcionItems() {
-    return request('/api/beneficiario/recepcion/items');
-  },
-  crearRecepcion() {
-    return request('/api/beneficiario/recepcion', { method: 'POST', body: JSON.stringify({}) });
-  },
-  guardarRecepcionItems(items) {
-    return request('/api/beneficiario/recepcion/items', { method: 'POST', body: JSON.stringify({ items }) });
-  },
-  enviarRecepcion() {
-    return request('/api/beneficiario/recepcion/enviar', { method: 'POST', body: JSON.stringify({}) });
-  },
   listarIncidencias(limit = 50, offset = 0, extraQuery = '') {
     const qs = `limit=${encodeURIComponent(limit)}&offset=${encodeURIComponent(offset)}&includeMedia=1` + (extraQuery ? `&${extraQuery}` : '');
     return request(`/api/beneficiario/incidencias?${qs}`);

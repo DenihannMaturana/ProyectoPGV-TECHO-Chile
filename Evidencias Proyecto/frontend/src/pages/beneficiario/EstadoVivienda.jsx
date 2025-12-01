@@ -14,9 +14,7 @@ import {
   CalendarIcon,
   MapPinIcon,
   SparklesIcon,
-  WrenchScrewdriverIcon,
-  ChartBarIcon,
-  ClipboardDocumentCheckIcon
+  WrenchScrewdriverIcon
 } from '@heroicons/react/24/outline'
 import { Modal } from '../../components/ui/Modal'
 
@@ -27,9 +25,7 @@ export default function EstadoVivienda() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [vivienda, setVivienda] = useState(null)
-  const [recepcion, setRecepcion] = useState(null)
   const [incidencias, setIncidencias] = useState([])
-  const [posventaForm, setPosventaForm] = useState(null)
   const [stats, setStats] = useState({
     incidenciasAbiertas: 0,
     incidenciasResueltas: 0,
@@ -63,9 +59,8 @@ export default function EstadoVivienda() {
       console.log('Cargando datos del estado de vivienda...')
       
       // Cargar datos en paralelo
-      const [viviendaRes, recepcionRes, incidenciasRes] = await Promise.allSettled([
+      const [viviendaRes, incidenciasRes] = await Promise.allSettled([
         beneficiarioApi.vivienda(),
-        beneficiarioApi.recepcionResumen(),
         beneficiarioApi.listarIncidencias(50)
       ])
 
@@ -97,13 +92,6 @@ export default function EstadoVivienda() {
         console.error('Error cargando vivienda:', viviendaRes.reason)
       }
 
-      if (recepcionRes.status === 'fulfilled') {
-        setRecepcion(recepcionRes.value.data)
-        console.log('Recepción cargada:', recepcionRes.value.data)
-      } else {
-        console.error('Error cargando recepción:', recepcionRes.reason)
-      }
-
       if (incidenciasRes.status === 'fulfilled') {
         const incidenciasData = incidenciasRes.value.data || []
         setIncidencias(incidenciasData)
@@ -126,11 +114,9 @@ export default function EstadoVivienda() {
       // Intentar cargar formulario de posventa
       try {
         const posventaRes = await beneficiarioApi.posventaGetForm()
-        setPosventaForm(posventaRes.data)
         console.log('Formulario posventa cargado:', posventaRes.data)
       } catch (posventaError) {
         console.log('No hay formulario de posventa disponible')
-        setPosventaForm(null)
       }
 
     } catch (generalError) {
@@ -422,7 +408,7 @@ export default function EstadoVivienda() {
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-medium text-gray-900">Incidencias Recientes</h3>
                   <div className="flex flex-wrap gap-2">
-                    {recepcion?.estado === 'enviada' || recepcion?.estado === 'revisada' ? (
+                    {vivienda?.flags?.puede_incidencias ? (
                       <button 
                         onClick={() => navigate('/beneficiario/nueva-incidencia')}
                         className="px-4 py-2 bg-orange-600 text-white text-sm rounded-lg hover:bg-orange-700 transition-colors"
@@ -431,7 +417,7 @@ export default function EstadoVivienda() {
                       </button>
                     ) : (
                       <div className="text-sm text-gray-500 bg-gray-100 px-3 py-2 rounded-lg">
-                        Completa tu recepción para reportar problemas
+                        Completa tu formulario postventa para reportar problemas
                       </div>
                     )}
                     <button 
@@ -473,7 +459,7 @@ export default function EstadoVivienda() {
                   <WrenchScrewdriverIcon className="w-16 h-16 mx-auto" />
                 </div>
                 <p className="text-gray-600 mb-4">No tienes incidencias reportadas</p>
-                {recepcion?.estado === 'enviada' || recepcion?.estado === 'revisada' ? (
+                {vivienda?.flags?.puede_incidencias ? (
                   <button 
                     onClick={() => navigate('/beneficiario/nueva-incidencia')}
                     className="px-6 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
@@ -481,7 +467,7 @@ export default function EstadoVivienda() {
                     Reportar Primera Incidencia
                   </button>
                 ) : (
-                  <p className="text-sm text-gray-500">Completa tu recepción para poder reportar problemas</p>
+                  <p className="text-gray-500">Completa tu formulario postventa para reportar problemas</p>
                 )}
               </div>
             )}

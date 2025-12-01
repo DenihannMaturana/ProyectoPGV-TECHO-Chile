@@ -122,31 +122,17 @@ export async function getMyHousing(req, res) {
     if (errViv) throw errViv
     if (!vivienda) return res.status(404).json({ success:false, message:'No tienes una vivienda asignada' })
 
-  // Recepción activa
-    const { data: recepcionActiva, error: errRec } = await supabase
-      .from('vivienda_recepcion')
-      .select('id, estado, fecha_creada, fecha_enviada, observaciones_count')
-      .eq('id_vivienda', vivienda.id_vivienda)
-      .in('estado', ['borrador','enviada'])
-      .order('id', { ascending:false })
-      .limit(1)
-    if (errRec) throw errRec
-    const recepcionActual = Array.isArray(recepcionActiva) && recepcionActiva.length ? recepcionActiva[0] : null
-
-    // Puede crear incidencias => si última recepcion enviada o alguna revisada
+    // Puede crear incidencias => si tiene algún formulario postventa enviado o revisado
     let puedeCrearIncidencias = false
-    if (recepcionActual?.estado === 'enviada') {
-      puedeCrearIncidencias = true
-    } else {
-      const { data: revisada, error: errRev } = await supabase
-        .from('vivienda_recepcion')
-        .select('id')
-        .eq('id_vivienda', vivienda.id_vivienda)
-        .eq('estado','revisada')
-        .limit(1)
-      if (errRev) throw errRev
-      puedeCrearIncidencias = Array.isArray(revisada) && revisada.length > 0
-    }
+    const { data: postventaForm, error: errPostv } = await supabase
+      .from('vivienda_postventa_form')
+      .select('id, estado')
+      .eq('id_vivienda', vivienda.id_vivienda)
+      .eq('beneficiario_uid', beneficiarioUid)
+      .in('estado', ['enviada', 'revisado_correcto', 'revisado_con_problemas'])
+      .limit(1)
+    if (errPostv) throw errPostv
+    puedeCrearIncidencias = Array.isArray(postventaForm) && postventaForm.length > 0
 
     // Intentar obtener un técnico referente del proyecto (si está configurado)
     let tecnico = null
@@ -170,40 +156,10 @@ export async function getMyHousing(req, res) {
       console.warn('getMyHousing: no se pudo cargar técnico del proyecto:', e?.message || e)
     }
 
-    return res.json({ success:true, data:{ vivienda, proyecto: vivienda.proyecto, tecnico, recepcion_activa: recepcionActual, flags:{ tiene_recepcion_activa: !!recepcionActual, puede_incidencias: puedeCrearIncidencias } } })
+    return res.json({ success:true, data:{ vivienda, proyecto: vivienda.proyecto, tecnico, flags:{ tiene_postventa_activa: puedeCrearIncidencias, puede_incidencias: puedeCrearIncidencias } } })
   } catch (error) {
     console.error('Error getMyHousing:', error)
     return res.status(500).json({ success:false, message:'Error al obtener la vivienda' })
-  }
-}
-
-/**
- * Obtiene el resumen de recepción de la vivienda del beneficiario
- */
-export async function getMyReception(req, res) {
-  try {
-    const beneficiarioUid = req.user?.uid || req.user?.sub
-    const { data: vivienda, error: errViv } = await supabase
-      .from('viviendas')
-      .select('id_vivienda')
-      .eq('beneficiario_uid', beneficiarioUid)
-      .maybeSingle()
-    if (errViv) throw errViv
-    if (!vivienda) return res.status(404).json({ success:false, message:'No tienes una vivienda asignada' })
-
-    const { data: resumen, error: errRes } = await supabase
-      .from('vista_recepcion_resumen')
-      .select('*')
-      .eq('id_vivienda', vivienda.id_vivienda)
-      .order('id', { ascending:false })
-      .limit(1)
-    if (errRes) throw errRes
-    const recepcionResumen = Array.isArray(resumen) && resumen.length ? resumen[0] : null
-    if (!recepcionResumen) return res.json({ success:true, data:{ tiene_recepcion:false, resumen:null } })
-    return res.json({ success:true, data:{ tiene_recepcion:true, resumen: recepcionResumen } })
-  } catch (error) {
-    console.error('Error getMyReception:', error)
-    return res.status(500).json({ success:false, message:'Error al obtener el resumen de recepción' })
   }
 }
 

@@ -10,7 +10,6 @@ import { verifyToken, authorizeRole } from '../middleware/auth.js'
 import {
   beneficiaryHealth,
   getMyHousing,
-  getMyReception,
   getMyIncidences,
   createNewIncidence,
   getIncidenceDetail,
@@ -47,9 +46,6 @@ router.get('/vivienda', getMyHousing)
 // Perfil beneficiario
 router.get('/perfil', getMyProfile)
 router.put('/perfil', updateMyProfile)
-
-// Información de recepción de la vivienda
-router.get('/recepcion', getMyReception)
 
 // Gestión de incidencias
 router.get('/incidencias', getMyIncidences)

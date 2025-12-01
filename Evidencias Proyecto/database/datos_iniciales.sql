@@ -92,8 +92,6 @@ TRUNCATE TABLE
 	proyecto_tecnico,
 	vivienda_postventa_item,
 	vivienda_postventa_form,
-	vivienda_recepcion_item,
-	vivienda_recepcion,
 	viviendas,
 	proyecto
 RESTART IDENTITY CASCADE;

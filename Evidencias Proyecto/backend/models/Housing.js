@@ -176,6 +176,23 @@ export async function assignBeneficiaryToHousing(housingId, beneficiaryId) {
     .single()
     
   if (error) throw error
+
+  // Actualizar formulario de postventa si existe
+  try {
+    const { error: updateFormError } = await supabase
+      .from('vivienda_postventa_form')
+      .update({ beneficiario_uid: beneficiaryId })
+      .eq('id_vivienda', housingId)
+      .is('beneficiario_uid', null);
+
+    if (updateFormError) {
+      console.error('Error actualizando formulario de postventa:', updateFormError);
+    }
+  } catch (formError) {
+    console.error('Error procesando formulario de postventa:', formError);
+    // No fallar la asignación por error en formulario
+  }
+
   return data
 }
 

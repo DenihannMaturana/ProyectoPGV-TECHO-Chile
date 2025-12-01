@@ -1218,6 +1218,7 @@ export async function createNewHousing(req, res) {
       numero_habitaciones,
       numero_banos,
       observaciones,
+      selected_template_id,
     } = req.body || {};
 
     const finalProjectId = proyecto_id || id_proyecto;
@@ -1306,6 +1307,69 @@ export async function createNewHousing(req, res) {
     );
 
     const created = await createHousing(housingData);
+
+    // Si se especificó un template de postventa, crear automáticamente el formulario
+    if (selected_template_id) {
+      try {
+        const templateId = Number(selected_template_id);
+        
+        // Verificar que el template existe y está activo
+        const { data: template, error: errTemplate } = await supabase
+          .from('postventa_template')
+          .select('*')
+          .eq('id', templateId)
+          .eq('activo', true)
+          .single();
+
+        if (!errTemplate && template) {
+          // Crear formulario de postventa basado en el template
+          const { data: newForm, error: errForm } = await supabase
+            .from('vivienda_postventa_form')
+            .insert({
+              id_vivienda: created.id_vivienda,
+              template_id: templateId,
+              estado: 'borrador',
+              beneficiario_uid: null // Se asignará cuando se asigne beneficiario
+            })
+            .select('*')
+            .single();
+
+          if (!errForm && newForm) {
+            // Obtener los ítems del template
+            const { data: templateItems, error: errItems } = await supabase
+              .from('postventa_template_item')
+              .select('*')
+              .eq('template_id', templateId)
+              .order('orden');
+
+            if (!errItems && templateItems && templateItems.length) {
+              // Crear los ítems del formulario basados en el template
+              const formItems = templateItems.map(item => ({
+                form_id: newForm.id,
+                categoria: item.categoria,
+                item: item.item,
+                orden: item.orden,
+                severidad_sugerida: item.severidad_sugerida,
+                ok: null, // Sin revisar aún
+                observaciones: null
+              }));
+
+              const { error: errInsertItems } = await supabase
+                .from('vivienda_postventa_form_item')
+                .insert(formItems);
+
+              if (errInsertItems) {
+                console.error('Error creando items del formulario:', errInsertItems);
+              }
+            }
+          }
+        }
+      } catch (templateError) {
+        console.error('Error procesando template de postventa:', templateError);
+        // No fallar la creación de vivienda por error de template
+      }
+    }
+
     res.status(201).json({ success: true, data: created });
   } catch (error) {
     console.error("Error creando vivienda:", error);
@@ -1367,44 +1431,38 @@ export async function updateHousingById(req, res) {
     }
 
     const prev = await getHousingById(id);
-    // Si se intenta marcar como entregada (inicial o legacy), validar recepción conforme
+    
+    // Parámetro para forzar entrega sin validar recepción
+    const forzarEntrega = req.body.forzar_entrega === true;
+    
+    // Si se intenta marcar como entregada (inicial o legacy), validar formulario postventa conforme
     const newEstado = (updates?.estado || "").toLowerCase();
     const toDelivered =
       newEstado === "entregada" || newEstado === "entregada_inicial";
-    if (toDelivered) {
-      // Debe existir una recepción revisada y conforme (sin ítems críticos)
-      const { data: recep, error: errRecep } = await supabase
-        .from("vivienda_recepcion")
+    if (toDelivered && !forzarEntrega) {
+      // Debe existir un formulario de postventa revisado correctamente
+      const { data: postventaForm, error: errPostventa } = await supabase
+        .from("vivienda_postventa_form")
         .select("id, estado")
         .eq("id_vivienda", id)
         .order("id", { ascending: false })
         .limit(1);
-      if (errRecep) throw errRecep;
-      const rec = Array.isArray(recep) && recep.length ? recep[0] : null;
-      if (!rec || rec.estado !== "revisada") {
+      if (errPostventa) throw errPostventa;
+      const form = Array.isArray(postventaForm) && postventaForm.length ? postventaForm[0] : null;
+      if (!form || form.estado !== "revisado_correcto") {
         return res.status(400).json({
           success: false,
-          message: "No se puede entregar: recepción no revisada/conforme",
+          message: "No se puede entregar: formulario postventa no revisado/conforme",
         });
       }
-      // Opcional: verificar que no existan observaciones críticas.
-      const { data: items, error: errItems } = await supabase
-        .from("vivienda_recepcion_item")
-        .select("id, categoria, item, ok")
-        .eq("recepcion_id", rec.id);
-      if (errItems) throw errItems;
-      const tieneCriticos = (items || []).some((i) => i.ok === false);
-      if (tieneCriticos) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "No se puede entregar: existen observaciones pendientes en recepción",
-        });
-      }
-      // Forzar flags de recepción conforme para trazabilidad
+    }
+    
+    // Si se fuerza la entrega o la validación pasa, marcar como conforme
+    if (toDelivered) {
       updates.recepcion_conforme = true;
       updates.fecha_recepcion_conforme = new Date().toISOString();
     }
+    
     const updated = await updateHousing(id, updates);
 
     // Disparador: si pasa a 'entregada' (legacy) o 'entregada_inicial' y tiene beneficiario, crear automáticamente el form de posventa

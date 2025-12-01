@@ -123,7 +123,7 @@ export default function HomeBeneficiario() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [vivData, setVivData] = useState(null); // { vivienda, proyecto, recepcion_activa, flags }
+  const [vivData, setVivData] = useState(null); // { vivienda, proyecto, flags }
   const [incidencias, setIncidencias] = useState([]);
   const [perfil, setPerfil] = useState(null);
   const [editPerfil, setEditPerfil] = useState({ editing: false, telefono: '' });
@@ -342,7 +342,7 @@ export default function HomeBeneficiario() {
       description: "Ver ubicación, plano, historial y condición actual de mi hogar",
       icon: <HomeIcon className={iconSize} />,
       color: "bg-green-500 hover:bg-green-600",
-      badge: vivData?.flags?.tiene_recepcion_activa ? "Activa" : "Sin recepción",
+      badge: vivData?.flags?.tiene_postventa_activa ? "Activa" : "Sin formularios",
       urgent: false,
       action: () => navigate('/beneficiario/estado-vivienda')
     },
