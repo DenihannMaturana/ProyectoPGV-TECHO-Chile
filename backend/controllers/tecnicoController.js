@@ -1075,11 +1075,11 @@ export async function listAvailableTechnicians(req, res) {
       })
     }
 
-    // Obtener todos los técnicos (supervisores y campo)
+    // Obtener solo técnicos de campo (no supervisores)
     const { data: tecnicos, error } = await supabase
       .from('usuarios')
       .select('uid, nombre, email, rol')
-      .in('rol', ['tecnico', 'tecnico_campo'])
+      .eq('rol', 'tecnico_campo')
       .order('nombre')
 
     if (error) throw error

@@ -177,12 +177,12 @@ export default function HomeTecnico() {
           <div className="text-left">
             <StatCard 
               icon={<BoltIcon className={iconSize} />} 
-              label="Mi Calificación" 
+              label="Calificaciones del Equipo" 
               value={stats.calificacion?.promedio_calificacion ? Number(stats.calificacion.promedio_calificacion).toFixed(1) : "Sin datos"} 
               subtitle={
                 stats.calificacion?.total_calificaciones > 0
-                  ? `${stats.calificacion.total_calificaciones} evaluación${stats.calificacion.total_calificaciones !== 1 ? 'es' : ''}`
-                  : "Aún no has sido calificado"
+                  ? `${stats.calificacion.total_calificaciones} evaluación${stats.calificacion.total_calificaciones !== 1 ? 'es' : ''} en tus proyectos`
+                  : "No hay calificaciones aún"
               } 
               accent='purple' 
             />

@@ -423,8 +423,9 @@ export default function AsignarTecnicoModal({ incidenciaId, incidencia, onClose,
                     placeholder="Selecciona una fecha"
                     className="w-full pl-10 pr-4 py-3 text-base border-2 border-gray-300 dark:border-gray-600 
                              rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 
-                             dark:bg-gray-700 dark:text-gray-100 transition-all
-                             placeholder:text-gray-400 dark:placeholder:text-gray-500"
+                             bg-white text-gray-900 transition-all
+                             placeholder:text-gray-400"
+                    style={{ colorScheme: 'light' }}
                   />
                 </div>
 

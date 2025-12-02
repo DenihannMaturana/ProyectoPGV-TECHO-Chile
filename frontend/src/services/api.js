@@ -91,6 +91,9 @@ export const beneficiarioApi = {
     const qs = `limit=${encodeURIComponent(limit)}&offset=${encodeURIComponent(offset)}&includeMedia=1` + (extraQuery ? `&${extraQuery}` : '');
     return request(`/api/beneficiario/incidencias?${qs}`);
   },
+  obtenerDetalleIncidencia(id) {
+    return request(`/api/beneficiario/incidencias/${id}?includeMedia=1`);
+  },
   crearIncidencia({ descripcion, categoria, garantia_tipo }) {
     return request('/api/beneficiario/incidencias', { method: 'POST', body: JSON.stringify({ descripcion, categoria, garantia_tipo }) });
   },

@@ -13,7 +13,6 @@ import { Toast } from "../components/ui/Toast";
 import { StatusPill } from "../components/ui/StatusPill";
 import { ReportFab } from "../components/ui/ReportFab";
 import CardIncidencia from "../components/CardIncidencia";
-import CardVivienda from "../components/CardVivienda";
 import { beneficiarioApi } from "../services/api";
 import { 
   HomeModernIcon,
@@ -348,7 +347,7 @@ export default function HomeBeneficiario() {
       description: "Ver ubicación, plano, historial y condición actual de mi hogar",
       icon: <HomeIcon className={iconSize} />,
       color: "bg-green-500 hover:bg-green-600",
-      badge: vivData?.flags?.tiene_postventa_activa ? "Activa" : "Sin formularios",
+      badge: vivData?.flags?.tiene_postventa_activa ? "Activa" : null,
       urgent: false,
       action: () => navigate('/beneficiario/estado-vivienda')
     },
@@ -480,12 +479,6 @@ export default function HomeBeneficiario() {
                       <span className="text-[10px] md:text-xs font-semibold text-sky-700 dark:text-sky-300 uppercase">Estado:</span>
                       <StatusPill value={viviendaEstado} />
                     </div>
-                    {vivData?.vivienda?.id_vivienda && (
-                      <div className="px-2.5 md:px-3 py-1.5 md:py-2 rounded-lg bg-white/70 dark:bg-slate-700/50 backdrop-blur border border-sky-100 dark:border-slate-600">
-                        <span className="text-[10px] md:text-xs font-semibold text-sky-700 dark:text-sky-300 uppercase">ID: </span>
-                        <span className="text-sm font-bold text-slate-800 dark:text-white">#{vivData.vivienda.id_vivienda}</span>
-                      </div>
-                    )}
                   </div>
                 </div>
                 
@@ -579,15 +572,22 @@ export default function HomeBeneficiario() {
                   <CardIncidencia
                     incidencia={report.raw}
                     onOpen={async (inc) => {
-                      // Recargar incidencia con todos los datos (incluyendo técnico)
+                      // Recargar incidencia con todos los datos SIEMPRE (incluyendo técnico y estado actualizado)
                       try {
                         console.log('📋 Abriendo detalle de incidencia:', inc.id_incidencia);
-                        const response = await beneficiarioApi.listarIncidencias(1, 0, `id=${inc.id_incidencia}`);
-                        const incidenciaCompleta = response.data?.[0] || inc;
-                        console.log('📋 Incidencia recargada con técnico:', incidenciaCompleta);
+                        console.log('📋 Estado actual en tarjeta:', inc.estado);
+                        
+                        // Forzar recarga desde backend para obtener estado más reciente
+                        const response = await beneficiarioApi.obtenerDetalleIncidencia(inc.id_incidencia);
+                        const incidenciaCompleta = response.data || inc;
+                        
+                        console.log('📋 Incidencia recargada desde backend:', incidenciaCompleta);
+                        console.log('📋 Estado actualizado:', incidenciaCompleta.estado);
+                        console.log('📋 Técnico asignado:', incidenciaCompleta.tecnico);
+                        
                         setDetailInc(incidenciaCompleta);
                       } catch (error) {
-                        console.error('Error recargando incidencia:', error);
+                        console.error('❌ Error recargando incidencia:', error);
                         setDetailInc(inc); // Usar la que tenemos si falla
                       }
                       
@@ -615,36 +615,24 @@ export default function HomeBeneficiario() {
           </SectionPanel>
         </div>
 
-  {/* Información de la vivienda y contacto */}
-        <div className="mt-12 grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <SectionPanel
-            title="Información de tu vivienda"
-            description="Detalles clave y contacto principal"
-            className="lg:col-span-2"
-            showBack={false}
-          >
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-sm">
-              <div className="space-y-4">
-                <div>
-                  {/* Información de vivienda renderizada más abajo por CardVivienda */}
-                {/* hidden input for quick uploads */}
-                <input ref={fileInputRef} type="file" multiple accept="image/*" className="hidden" onChange={async (e) => {
-                  const files = Array.from(e.target.files || [])
-                  if (!files.length || !uploadTarget) return
-                  try {
-                    setError(""); setLoading(true)
-                    await beneficiarioApi.subirMediaIncidencia(uploadTarget.id_incidencia, files)
-                    setSuccess('Fotos subidas correctamente')
-                    await loadData()
-                  } catch (err) {
-                    setError(err.message || 'No se pudieron subir las fotos')
-                  } finally {
-                    setLoading(false); setUploadTarget(null); e.target.value = ''
-                  }
-                }} />
+        {/* hidden input for quick uploads */}
+        <input ref={fileInputRef} type="file" multiple accept="image/*" className="hidden" onChange={async (e) => {
+          const files = Array.from(e.target.files || [])
+          if (!files.length || !uploadTarget) return
+          try {
+            setError(""); setLoading(true)
+            await beneficiarioApi.subirMediaIncidencia(uploadTarget.id_incidencia, files)
+            setSuccess('Fotos subidas correctamente')
+            await loadData()
+          } catch (err) {
+            setError(err.message || 'No se pudieron subir las fotos')
+          } finally {
+            setLoading(false); setUploadTarget(null); e.target.value = ''
+          }
+        }} />
 
-                {/* Modal detalle incidencia (centrado mediante portal) */}
-                <Modal isOpen={!!detailInc} onClose={() => setDetailInc(null)} maxWidth="max-w-3xl">
+        {/* Modal detalle incidencia (centrado mediante portal) */}
+        <Modal isOpen={!!detailInc} onClose={() => setDetailInc(null)} maxWidth="max-w-3xl">
                   {detailInc && (
                     <div className="p-6 md:p-7 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-600">
                       <div className="flex items-start justify-between mb-5">
@@ -1017,104 +1005,98 @@ export default function HomeBeneficiario() {
                       </div>
                     </div>
                   </div>, document.body)
-                }
-                {/* Reemplazamos con componente dinámico */}
-                <CardVivienda vivienda={vivData?.vivienda} tecnico={vivData?.tecnico || { nombre: 'Sin asignar', telefono: '—', email: '—', horario: '—' }} />
+        }
+        
+  {/* Mi Usuario y Consejos rápidos lado a lado */}
+        <div className="mt-12 grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <SectionPanel
+            title="Mi Usuario"
+            showBack={false}
+          >
+            <div className="text-sm space-y-4">
+              <div className="grid grid-cols-1 gap-3">
+                <div>
+                  <p className="text-xs text-slate-500">Nombre</p>
+                  <p className="font-medium">{perfil?.nombre || user?.nombre || '—'}</p>
                 </div>
+                <div>
+                  <p className="text-xs text-slate-500">Email</p>
+                  <p className="font-medium break-all">{perfil?.email || user?.email || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">RUT</p>
+                  <p className="font-medium">{perfil?.rut || '—'}</p>
+                </div>
+              </div>
+              <div className="pt-2">
+                <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">Teléfono de contacto</label>
+                {!editPerfil.editing ? (
+                  <div className="flex items-center justify-between">
+                    <p className="text-slate-800 dark:text-slate-100">{perfil?.telefono || 'No registrado'}</p>
+                    <button className="btn-outline btn-sm" onClick={() => setEditPerfil({ editing: true, telefono: perfil?.telefono || '' })}>Editar</button>
+                  </div>
+                ) : (
+                  <form
+                    className="space-y-2"
+                    onSubmit={async (e) => {
+                      e.preventDefault()
+                      const raw = (editPerfil.telefono || '').toString()
+                      const cleaned = raw.replace(/[^\d+]/g, '')
+                      if (cleaned && (cleaned.replace(/\D/g,'').length < 8 || cleaned.replace(/\D/g,'').length > 15)) {
+                        setError('Teléfono inválido: use entre 8 y 15 dígitos')
+                        return
+                      }
+                      try {
+                        setLoading(true); setError('');
+                        const resp = await beneficiarioApi.actualizarPerfil({ telefono: cleaned || null })
+                        setPerfil(resp.data || { ...perfil, telefono: cleaned || null })
+                        setSuccess('Teléfono actualizado')
+                        setEditPerfil({ editing: false, telefono: cleaned || '' })
+                      } catch (err) {
+                        setError(err.message || 'No se pudo actualizar el teléfono')
+                      } finally {
+                        setLoading(false)
+                      }
+                    }}
+                  >
+                    <input
+                      type="tel"
+                      inputMode="tel"
+                      placeholder="+56912345678"
+                      className="w-full rounded-md border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/60 px-3 py-2 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
+                      value={editPerfil.telefono}
+                      onChange={(e) => setEditPerfil(prev => ({ ...prev, telefono: e.target.value }))}
+                    />
+                    <div className="flex justify-end gap-2">
+                      <button type="button" className="btn-outline btn-sm" onClick={() => setEditPerfil({ editing: false, telefono: perfil?.telefono || '' })}>Cancelar</button>
+                      <button type="submit" className="btn-primary btn-sm">Guardar</button>
+                    </div>
+                  </form>
+                )}
               </div>
             </div>
           </SectionPanel>
-          <div className="space-y-8">
-            <SectionPanel
-              title="Mi Usuario"
-              description="Datos de contacto y cuenta"
-              showBack={false}
-            >
-              <div className="text-sm space-y-4">
-                <div className="grid grid-cols-1 gap-3">
-                  <div>
-                    <p className="text-xs text-slate-500">Nombre</p>
-                    <p className="font-medium">{perfil?.nombre || user?.nombre || '—'}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-500">Email</p>
-                    <p className="font-medium break-all">{perfil?.email || user?.email || '—'}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-500">RUT</p>
-                    <p className="font-medium">{perfil?.rut || '—'}</p>
-                  </div>
-                </div>
-                <div className="pt-2">
-                  <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">Teléfono de contacto</label>
-                  {!editPerfil.editing ? (
-                    <div className="flex items-center justify-between">
-                      <p className="text-slate-800 dark:text-slate-100">{perfil?.telefono || 'No registrado'}</p>
-                      <button className="btn-outline btn-sm" onClick={() => setEditPerfil({ editing: true, telefono: perfil?.telefono || '' })}>Editar</button>
-                    </div>
-                  ) : (
-                    <form
-                      className="space-y-2"
-                      onSubmit={async (e) => {
-                        e.preventDefault()
-                        const raw = (editPerfil.telefono || '').toString()
-                        const cleaned = raw.replace(/[^\d+]/g, '')
-                        if (cleaned && (cleaned.replace(/\D/g,'').length < 8 || cleaned.replace(/\D/g,'').length > 15)) {
-                          setError('Teléfono inválido: use entre 8 y 15 dígitos')
-                          return
-                        }
-                        try {
-                          setLoading(true); setError('');
-                          const resp = await beneficiarioApi.actualizarPerfil({ telefono: cleaned || null })
-                          setPerfil(resp.data || { ...perfil, telefono: cleaned || null })
-                          setSuccess('Teléfono actualizado')
-                          setEditPerfil({ editing: false, telefono: cleaned || '' })
-                        } catch (err) {
-                          setError(err.message || 'No se pudo actualizar el teléfono')
-                        } finally {
-                          setLoading(false)
-                        }
-                      }}
-                    >
-                      <input
-                        type="tel"
-                        inputMode="tel"
-                        placeholder="+56912345678"
-                        className="w-full rounded-md border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/60 px-3 py-2 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
-                        value={editPerfil.telefono}
-                        onChange={(e) => setEditPerfil(prev => ({ ...prev, telefono: e.target.value }))}
-                      />
-                      <div className="flex justify-end gap-2">
-                        <button type="button" className="btn-outline btn-sm" onClick={() => setEditPerfil({ editing: false, telefono: perfil?.telefono || '' })}>Cancelar</button>
-                        <button type="submit" className="btn-primary btn-sm">Guardar</button>
-                      </div>
-                    </form>
-                  )}
-                </div>
-              </div>
-            </SectionPanel>
 
-            <SectionPanel
-              title="Consejos rápidos"
-              description="Cuidado preventivo de tu vivienda"
-              variant="highlight"
-              showBack={false}
-            >
-              <ul className="text-sm text-techo-gray-700 space-y-3" aria-label="Lista de consejos">
-                {[
-                  { icon: '💨', text: 'Ventila tu hogar diariamente para evitar humedad.' },
-                  { icon: '🔌', text: 'Revisa periódicamente las instalaciones eléctricas.' },
-                  { icon: '🚨', text: 'Reporta cualquier problema inmediatamente.' },
-                  { icon: '🧼', text: 'Mantén limpios los desagües y canaletas.' }
-                ].map((c,i) => (
-                  <li key={i} className="flex items-start gap-3">
-                    <span className="text-lg leading-none" aria-hidden>{c.icon}</span>
-                    <span className="leading-snug">{c.text}</span>
-                  </li>
-                ))}
-              </ul>
-            </SectionPanel>
-          </div>
+          <SectionPanel
+            title="Consejos rápidos"
+            description="Cuidado preventivo de tu vivienda"
+            variant="highlight"
+            showBack={false}
+          >
+            <ul className="text-sm text-techo-gray-700 space-y-3" aria-label="Lista de consejos">
+              {[
+                { icon: '💨', text: 'Ventila tu hogar diariamente para evitar humedad.' },
+                { icon: '🔌', text: 'Revisa periódicamente las instalaciones eléctricas.' },
+                { icon: '🚨', text: 'Reporta cualquier problema inmediatamente.' },
+                { icon: '🧼', text: 'Mantén limpios los desagües y canaletas.' }
+              ].map((c,i) => (
+                <li key={i} className="flex items-start gap-3">
+                  <span className="text-lg leading-none" aria-hidden>{c.icon}</span>
+                  <span className="leading-snug">{c.text}</span>
+                </li>
+              ))}
+            </ul>
+          </SectionPanel>
         </div>
 
         {/* Garantías DS49: información clave para el beneficiario */}
