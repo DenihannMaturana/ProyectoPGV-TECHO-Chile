@@ -15,7 +15,8 @@ import {
   getIncidenceDetail,
   validateIncidence,
   getMyProfile,
-  updateMyProfile
+  updateMyProfile,
+  cerrarIncidencia
 } from '../controllers/beneficiarioController.js'
 import { 
   getPosventaForm, 
@@ -54,6 +55,7 @@ router.get('/incidencias/:id', getIncidenceDetail)
 router.get('/incidencias/:id/media', listIncidenciaMediaBeneficiario)
 router.post('/incidencias/:id/media', uploadIncidenciaMediaBeneficiario)
 router.post('/incidencias/:id/validar', validateIncidence)
+router.post('/incidencias/:id_incidencia/cerrar', cerrarIncidencia)
 
 // Posventa
 router.get('/posventa/form', getPosventaForm)

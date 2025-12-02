@@ -91,6 +91,9 @@ export const beneficiarioApi = {
     const qs = `limit=${encodeURIComponent(limit)}&offset=${encodeURIComponent(offset)}&includeMedia=1` + (extraQuery ? `&${extraQuery}` : '');
     return request(`/api/beneficiario/incidencias?${qs}`);
   },
+  obtenerDetalleIncidencia(id) {
+    return request(`/api/beneficiario/incidencias/${id}?includeMedia=1`);
+  },
   crearIncidencia({ descripcion, categoria, garantia_tipo }) {
     return request('/api/beneficiario/incidencias', { method: 'POST', body: JSON.stringify({ descripcion, categoria, garantia_tipo }) });
   },
@@ -152,6 +155,13 @@ export const beneficiarioApi = {
   },
   posventaListarPlanos() {
     return request('/api/beneficiario/posventa/planos')
+  },
+  // Cerrar incidencia como satisfactoriamente resuelta
+  cerrarIncidencia(id_incidencia, comentario = '') {
+    return request(`/api/beneficiario/incidencias/${id_incidencia}/cerrar`, {
+      method: 'POST',
+      body: JSON.stringify({ comentario })
+    })
   }
 }
 
@@ -472,3 +482,52 @@ export async function getAuditLogs(params = {}) {
 export async function getUserAuditLogs(uid, limit = 100) {
   return request(`/api/admin/audit-logs/user/${uid}?limit=${limit}`);
 }
+
+// ---------------- Calificaciones ----------------
+export const calificacionesApi = {
+  // Crear calificación (beneficiario califica técnico)
+  crear({ id_incidencia, id_tecnico, calificacion, comentario }) {
+    return request('/api/calificaciones', { 
+      method: 'POST', 
+      body: JSON.stringify({ id_incidencia, id_tecnico, calificacion, comentario }) 
+    });
+  },
+  
+  // Obtener calificación de una incidencia específica
+  obtenerPorIncidencia(id_incidencia) {
+    return request(`/api/calificaciones/incidencia/${id_incidencia}`);
+  },
+  
+  // Obtener estadísticas propias del técnico autenticado
+  obtenerMisEstadisticas() {
+    return request('/api/calificaciones/mis-estadisticas');
+  },
+  
+  // Obtener mis calificaciones como técnico
+  obtenerMisCalificaciones({ limite = 50, offset = 0 } = {}) {
+    const params = new URLSearchParams();
+    params.set('limite', limite);
+    params.set('offset', offset);
+    return request(`/api/calificaciones/mis-calificaciones?${params.toString()}`);
+  },
+  
+  // Obtener ranking de técnicos (para admin)
+  obtenerRanking({ limite = 10 } = {}) {
+    const params = new URLSearchParams();
+    params.set('limite', limite);
+    return request(`/api/calificaciones/ranking?${params.toString()}`);
+  },
+  
+  // Actualizar calificación existente
+  actualizar(id_calificacion, { calificacion, comentario }) {
+    return request(`/api/calificaciones/${id_calificacion}`, { 
+      method: 'PUT', 
+      body: JSON.stringify({ calificacion, comentario }) 
+    });
+  },
+  
+  // Eliminar calificación (solo admin)
+  eliminar(id_calificacion) {
+    return request(`/api/calificaciones/${id_calificacion}`, { method: 'DELETE' });
+  }
+};

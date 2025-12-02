@@ -4,6 +4,8 @@ import { DashboardLayout } from '../../components/ui/DashboardLayout'
 import { SectionPanel } from '../../components/ui/SectionPanel'
 import { Toast } from '../../components/ui/Toast'
 import { StatusPill } from '../../components/ui/StatusPill'
+import { Modal } from '../../components/ui/Modal'
+import CalificacionModal from '../../components/CalificacionModal'
 import { beneficiarioApi } from '../../services/api'
 import { 
   DocumentTextIcon, 
@@ -14,9 +16,9 @@ import {
   CalendarIcon,
   MapPinIcon,
   SparklesIcon,
-  WrenchScrewdriverIcon
+  WrenchScrewdriverIcon,
+  CheckCircleIcon
 } from '@heroicons/react/24/outline'
-import { Modal } from '../../components/ui/Modal'
 
 export default function EstadoVivienda() {
   const navigate = useNavigate()
@@ -35,6 +37,12 @@ export default function EstadoVivienda() {
   const [planos, setPlanos] = useState([])
   const [loadingPlanos, setLoadingPlanos] = useState(false)
   const [projectCoords, setProjectCoords] = useState(null) // Coordenadas del proyecto (geocodificadas o directas)
+  
+  // Estados para calificación
+  const [showCalificacionModal, setShowCalificacionModal] = useState(false)
+  const [incidenciaParaCalificar, setIncidenciaParaCalificar] = useState(null)
+  const [tecnicoParaCalificar, setTecnicoParaCalificar] = useState(null)
+  const [cerrandoIncidencia, setCerrandoIncidencia] = useState(null)
 
   // Valor de éxito proveniente de la navegación (estable y seguro para dependencias)
   const navSuccess = Boolean(location.state?.success)
@@ -125,6 +133,44 @@ export default function EstadoVivienda() {
     } finally {
       setLoading(false)
     }
+  }
+
+  // Función para cerrar incidencia
+  async function handleCerrarIncidencia(incidencia) {
+    if (!window.confirm('¿Confirmas que esta incidencia ha sido resuelta satisfactoriamente?')) {
+      return;
+    }
+
+    setCerrandoIncidencia(incidencia.id_incidencia);
+
+    try {
+      const response = await beneficiarioApi.cerrarIncidencia(incidencia.id_incidencia, 'Cerrada por el beneficiario como satisfactoriamente resuelta');
+      
+      if (response.data.puede_calificar && response.data.tecnico) {
+        // Mostrar modal de calificación
+        setIncidenciaParaCalificar(response.data.incidencia);
+        setTecnicoParaCalificar(response.data.tecnico);
+        setShowCalificacionModal(true);
+      } else {
+        setSuccess('Incidencia cerrada exitosamente');
+      }
+
+      // Recargar datos
+      await loadAllData();
+    } catch (error) {
+      console.error('Error cerrando incidencia:', error);
+      setError(error.message || 'Error al cerrar la incidencia');
+    } finally {
+      setCerrandoIncidencia(null);
+    }
+  }
+
+  // Función cuando se completa la calificación
+  function handleCalificacionCreada() {
+    setSuccess('Incidencia cerrada y técnico calificado exitosamente');
+    setShowCalificacionModal(false);
+    setIncidenciaParaCalificar(null);
+    setTecnicoParaCalificar(null);
   }
 
   async function loadPlanos() {
@@ -441,9 +487,21 @@ export default function EstadoVivienda() {
                             {incidencia.prioridad}
                           </span>
                         </div>
-                        <span className="text-sm text-gray-500">
-                          {formatFecha(incidencia.fecha_reporte)}
-                        </span>
+                        <div className="flex items-center space-x-2">
+                          <span className="text-sm text-gray-500">
+                            {formatFecha(incidencia.fecha_reporte)}
+                          </span>
+                          {incidencia.estado === 'resuelta' && (
+                            <button
+                              onClick={() => handleCerrarIncidencia(incidencia)}
+                              disabled={cerrandoIncidencia === incidencia.id_incidencia}
+                              className="px-3 py-1 bg-green-600 text-white text-xs rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center space-x-1"
+                            >
+                              <CheckCircleIcon className="w-4 h-4" />
+                              <span>{cerrandoIncidencia === incidencia.id_incidencia ? 'Cerrando...' : 'Cerrar como resuelta'}</span>
+                            </button>
+                          )}
+                        </div>
                       </div>
                       <p className="text-gray-900 mb-1 line-clamp-2">{incidencia.descripcion}</p>
                       {incidencia.categoria && (
@@ -491,6 +549,19 @@ export default function EstadoVivienda() {
           open={showPlanoModal} 
           onClose={() => setShowPlanoModal(false)} 
           plan={planos[0]} 
+        />
+        
+        {/* Modal de Calificación */}
+        <CalificacionModal
+          open={showCalificacionModal}
+          onClose={() => {
+            setShowCalificacionModal(false);
+            setIncidenciaParaCalificar(null);
+            setTecnicoParaCalificar(null);
+          }}
+          incidencia={incidenciaParaCalificar}
+          tecnico={tecnicoParaCalificar}
+          onCalificacionCreada={handleCalificacionCreada}
         />
       </div>
     </DashboardLayout>

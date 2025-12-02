@@ -44,6 +44,27 @@ export async function getIncidencesByBeneficiary(beneficiaryId) {
 }
 
 /**
+ * Obtiene una incidencia por su ID
+ * @param {number} incidenceId - ID de la incidencia
+ * @returns {Object} Incidencia encontrada
+ */
+export async function obtenerPorId(incidenceId) {
+  const { data, error } = await supabase
+    .from('incidencias')
+    .select(`
+      *,
+      viviendas(id_vivienda, direccion, proyecto(nombre)),
+      reporta:usuarios!incidencias_id_usuario_reporta_fkey(nombre, email),
+      tecnico:usuarios!incidencias_id_usuario_tecnico_fkey(nombre, email)
+    `)
+    .eq('id_incidencia', incidenceId)
+    .single()
+    
+  if (error) throw error
+  return data
+}
+
+/**
  * Crea una nueva incidencia
  * @param {Object} incidenceData - Datos de la incidencia
  * @returns {Object} Incidencia creada

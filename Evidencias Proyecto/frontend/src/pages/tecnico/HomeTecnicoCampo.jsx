@@ -17,7 +17,8 @@ import {
   HomeModernIcon,
   FireIcon,
   UserIcon,
-  PhoneIcon
+  PhoneIcon,
+  StarIcon
 } from '@heroicons/react/24/outline'
 
 /**
@@ -29,6 +30,7 @@ export default function HomeTecnicoCampo() {
   const [incidencias, setIncidencias] = useState([])
   const [visitasSugeridas, setVisitasSugeridas] = useState([])
   const [stats, setStats] = useState({ total: 0, en_proceso: 0, cerradas: 0 })
+  const [calificacion, setCalificacion] = useState(null)
   const [loading, setLoading] = useState(true)
   const [loadingVisitas, setLoadingVisitas] = useState(true)
   const [error, setError] = useState('')
@@ -82,6 +84,16 @@ export default function HomeTecnicoCampo() {
       } else {
         setError(response.message || 'Error al cargar incidencias')
       }
+
+      // Cargar calificaciones del técnico
+      try {
+        const calResponse = await tecnicoApi.dashboardStats()
+        if (calResponse.success && calResponse.data?.calificacion) {
+          setCalificacion(calResponse.data.calificacion)
+        }
+      } catch (calErr) {
+        console.error('Error cargando calificaciones:', calErr)
+      }
     } catch (err) {
       console.error('Error cargando dashboard:', err)
       setError('No se pudieron cargar tus incidencias asignadas')
@@ -109,7 +121,7 @@ export default function HomeTecnicoCampo() {
       <div className='space-y-6'>
         
         {/* Estadísticas Rápidas */}
-        <div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
+        <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4'>
           <div className='bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700'>
             <div className='flex items-center justify-between'>
               <div>
@@ -137,6 +149,25 @@ export default function HomeTecnicoCampo() {
                 <p className='text-3xl font-bold text-green-600 dark:text-green-400'>{stats.cerradas}</p>
               </div>
               <CheckCircleIcon className='w-12 h-12 text-green-500' />
+            </div>
+          </div>
+
+          <div className='bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/30 dark:to-purple-800/30 rounded-lg p-6 border-2 border-purple-300 dark:border-purple-700'>
+            <div className='flex items-center justify-between'>
+              <div>
+                <p className='text-sm text-purple-700 dark:text-purple-300 font-semibold'>Mi Calificación</p>
+                <p className='text-3xl font-bold text-purple-900 dark:text-purple-100'>
+                  {calificacion?.promedio_calificacion 
+                    ? Number(calificacion.promedio_calificacion).toFixed(1) 
+                    : 'Sin datos'}
+                </p>
+                <p className='text-xs text-purple-600 dark:text-purple-400 mt-1'>
+                  {calificacion?.total_calificaciones > 0
+                    ? `${calificacion.total_calificaciones} evaluación${calificacion.total_calificaciones !== 1 ? 'es' : ''}`
+                    : 'Aún no has sido calificado'}
+                </p>
+              </div>
+              <StarIcon className='w-12 h-12 text-purple-500' />
             </div>
           </div>
         </div>

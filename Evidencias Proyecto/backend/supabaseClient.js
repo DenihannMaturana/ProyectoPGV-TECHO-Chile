@@ -37,4 +37,4 @@ supabase.rpc = new Proxy(supabase.rpc, {
 	}
 })
 
-console.log(' Supabase configurado con zona horaria: America/Santiago (UTC-3)')
+console.log('Supabase configurado con zona horaria: America/Santiago (UTC-3)')

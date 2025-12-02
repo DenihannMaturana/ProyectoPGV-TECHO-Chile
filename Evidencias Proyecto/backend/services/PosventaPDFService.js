@@ -376,17 +376,17 @@ class PosventaPDFService {
     let page = null;
     let browser = null;
     try {
-      console.log(`🔄 Obteniendo datos del formulario ${formId}...`);
+      console.log(`Obteniendo datos del formulario ${formId}...`);
       // Obtener datos
   const { form, items } = await this.obtenerDatosFormulario(formId);
 
   const itemsPrepared = await this._prepareFotos(items);
 
-  console.log(`🔄 Generando HTML para formulario ${formId}...`);
+  console.log(`Generando HTML para formulario ${formId}...`);
   // Generar HTML
   const html = this.generarHTMLFormulario(form, itemsPrepared);
       
-      console.log(`🔄 Inicializando browser para formulario ${formId}...`);
+      console.log(`Inicializando browser para formulario ${formId}...`);
       // Crear PDF - Usar nueva instancia del browser cada vez para mayor estabilidad
       browser = await puppeteer.launch({
         headless: true,
@@ -399,7 +399,7 @@ class PosventaPDFService {
       
       page = await browser.newPage();
       
-      console.log(`🔄 Configurando contenido HTML para formulario ${formId}...`);
+      console.log(`Configurando contenido HTML para formulario ${formId}...`);
       await page.setContent(html, { waitUntil: 'networkidle0' });
       try {
         await page.evaluate(async () => {
@@ -412,7 +412,7 @@ class PosventaPDFService {
       // Asegurar estilos consistentes para PDF
       await page.emulateMediaType('screen');
       
-      console.log(`🔄 Generando PDF para formulario ${formId}...`);
+      console.log(`Generando PDF para formulario ${formId}...`);
       const pdfBuffer = await page.pdf({
         format: 'A4',
         printBackground: true,
@@ -428,7 +428,7 @@ class PosventaPDFService {
       const fecha = new Date().toISOString().split('T')[0];
       const filename = `posventa_${form.id}_${form.usuarios.nombre.replace(/\s+/g, '_')}_${fecha}.pdf`;
       
-      console.log(`✅ PDF generado exitosamente: ${filename}`);
+      console.log(`PDF generado exitosamente: ${filename}`);
       
       return {
         buffer: pdfBuffer,
@@ -438,7 +438,7 @@ class PosventaPDFService {
       };
       
     } catch (error) {
-      console.error('❌ Error generando PDF:', error);
+      console.error('Error generando PDF:', error);
       throw error;
     } finally {
       // Cerrar página y browser siempre

@@ -17,6 +17,7 @@ import geocodingRoutes from './routes/geocoding.js'
 import incidenciasRoutes from './routes/incidencias.js'
 import posventaRoutes from './routes/posventa.js'
 import setupRoutes from './routes/setup.js'
+import calificacionesRoutes from './routes/calificaciones.js'
 
 // Configurar variables de entorno
 dotenv.config()
@@ -46,6 +47,7 @@ app.use('/api/geo', geocodingRoutes)
 app.use('/api', incidenciasRoutes)
 app.use('/api/posventa', posventaRoutes)
 app.use('/api/setup', setupRoutes)
+app.use('/api/calificaciones', calificacionesRoutes)
 
 // Rutas de posventa montadas arriba
 

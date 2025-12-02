@@ -208,19 +208,8 @@ export default function PosventaFormPage() {
                                   <button type="button" disabled={disabled} onClick={() => updateItem(idx, { ok: false })} className={`px-3 py-1 rounded text-xs font-semibold border transition ${!it.ok ? 'bg-red-500 border-red-600 text-white' : 'bg-red-50 border-red-300 text-red-600 hover:bg-red-100'}`}>NO</button>
                                 </div>
                               </div>
-                              <div className="grid md:grid-cols-3 gap-4">
-                                {!it.ok && (
-                                  <div className="flex flex-col gap-1">
-                                    <label className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">Severidad</label>
-                                    <select value={it.severidad || ''} disabled={disabled} onChange={e => updateItem(idx, { severidad: e.target.value || null })} className="rounded border border-slate-300 dark:border-slate-500 bg-slate-50 dark:bg-slate-600 px-2 py-1 text-sm">
-                                      <option value="">(n/a)</option>
-                                      <option value="menor">Menor</option>
-                                      <option value="media">Media</option>
-                                      <option value="mayor">Mayor</option>
-                                    </select>
-                                  </div>
-                                )}
-                                <div className={`flex flex-col gap-1 ${!it.ok ? 'md:col-span-2' : 'md:col-span-3'}`}>
+                              <div className="grid md:grid-cols-1 gap-4">
+                                <div className="flex flex-col gap-1">
                                   <label className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">Comentario</label>
                                   <textarea value={it.comentario || ''} disabled={disabled} onChange={e => updateItem(idx, { comentario: e.target.value })} className="rounded border border-slate-300 dark:border-slate-500 bg-slate-50 dark:bg-slate-600 px-2 py-1 h-20 resize-none text-sm" placeholder="Observaciones opcionales" />
                                 </div>

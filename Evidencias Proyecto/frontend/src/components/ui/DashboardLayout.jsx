@@ -29,10 +29,14 @@ export function DashboardLayout({ title, subtitle, user, onLogout, children, acc
         <div className="app-container flex items-center justify-between py-4">
           <div className="flex items-center gap-3 min-w-0">
             <img
-              src="/LOGO-TECHO-COLOR-768x768.png"
+              src={`${process.env.PUBLIC_URL}/LOGO-TECHO-COLOR-768x768.png`}
               alt="Logo TECHO"
               className="h-9 w-9 object-contain drop-shadow-sm select-none"
               draggable="false"
+              onError={(e) => {
+                console.error('Error cargando logo TECHO');
+                e.target.style.display = 'none';
+              }}
             />
             <div className="flex flex-col truncate">
               <h1 className={`text-lg sm:text-xl font-bold tracking-tight ${accentText} truncate`}>{title}</h1>

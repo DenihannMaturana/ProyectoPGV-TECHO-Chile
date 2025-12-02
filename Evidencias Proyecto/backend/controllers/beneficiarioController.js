@@ -178,7 +178,7 @@ export async function getMyIncidences(req, res) {
 
     let query = supabase
       .from('incidencias')
-      .select(`*, viviendas(id_vivienda,direccion, proyecto(nombre))`, { count: 'exact' })
+      .select(`*, viviendas(id_vivienda,direccion, proyecto(nombre)), tecnico:usuarios!incidencias_id_usuario_tecnico_fkey(uid,nombre,email)`, { count: 'exact' })
       .order('fecha_reporte', { ascending:false })
 
     if (role !== 'administrador') query = query.eq('id_usuario_reporta', beneficiarioUid)
@@ -295,7 +295,7 @@ export async function getIncidenceDetail(req, res) {
     const incidenciaId = Number(req.params.id)
     const { data: incidencia, error: errInc } = await supabase
       .from('incidencias')
-      .select(`*, viviendas(id_vivienda,direccion, proyecto(nombre, ubicacion)), tecnico:usuarios!incidencias_id_usuario_tecnico_fkey(nombre, email)`) 
+      .select(`*, viviendas(id_vivienda,direccion, proyecto(nombre, ubicacion)), tecnico:usuarios!incidencias_id_usuario_tecnico_fkey(uid,nombre,email)`) 
       .eq('id_incidencia', incidenciaId)
       .eq('id_usuario_reporta', beneficiarioUid)
       .single()
@@ -814,5 +814,111 @@ export async function resetPosventaForm(req, res) {
   } catch (error) {
     console.error('Error resetPosventaForm:', error)
     return res.status(500).json({ success:false, message:'Error reseteando formulario de posventa' })
+  }
+}
+
+/**
+ * Cerrar incidencia como satisfactoriamente resuelta (beneficiario)
+ * Solo puede cerrar incidencias que estén en estado 'resuelta'
+ */
+export async function cerrarIncidencia(req, res) {
+  try {
+    const beneficiarioUid = req.user?.uid || req.user?.sub;
+    const { id_incidencia } = req.params;
+    const { comentario } = req.body;
+
+    if (!beneficiarioUid) {
+      return res.status(401).json({ success: false, message: 'No autenticado' });
+    }
+
+    // Verificar que la incidencia existe y pertenece al beneficiario
+    const { data: incidencia, error: incError } = await supabase
+      .from('incidencias')
+      .select(`
+        *,
+        viviendas!inner(beneficiario_uid, id_vivienda, direccion),
+        tecnico:usuarios!incidencias_id_usuario_tecnico_fkey(uid, nombre, email)
+      `)
+      .eq('id_incidencia', id_incidencia)
+      .single();
+
+    if (incError) {
+      console.error('Error obteniendo incidencia:', incError);
+      return res.status(404).json({ success: false, message: 'Incidencia no encontrada' });
+    }
+
+    // Verificar que el beneficiario es el dueño de la vivienda
+    if (incidencia.viviendas.beneficiario_uid !== beneficiarioUid) {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'No tienes permisos para cerrar esta incidencia' 
+      });
+    }
+
+    // Verificar que la incidencia está en estado 'resuelta'
+    if (incidencia.estado !== 'resuelta') {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Solo puedes cerrar incidencias que han sido resueltas por el técnico' 
+      });
+    }
+
+    // Actualizar el estado a 'cerrada'
+    const { error: updateError } = await supabase
+      .from('incidencias')
+      .update({
+        estado: 'cerrada',
+        fecha_cerrada: new Date().toISOString(),
+        fecha_completada: new Date().toISOString(), // También marcar como completada
+        updated_at: new Date().toISOString()
+      })
+      .eq('id_incidencia', id_incidencia);
+
+    if (updateError) {
+      console.error('Error actualizando incidencia:', updateError);
+      return res.status(500).json({ success: false, message: 'Error cerrando la incidencia' });
+    }
+
+    // Registrar evento en historial
+    try {
+      await logIncidenciaEvent(id_incidencia, {
+        evento_tipo: 'estado_cambiado',
+        estado_anterior: 'resuelta',
+        estado_nuevo: 'cerrada',
+        comentario: comentario || 'Incidencia cerrada por el beneficiario como satisfactoriamente resuelta',
+        realizado_por: beneficiarioUid
+      });
+    } catch (logError) {
+      console.error('Error registrando evento en historial:', logError);
+      // No fallar la operación por esto
+    }
+
+    // Devolver datos necesarios para la calificación
+    res.json({
+      success: true,
+      message: 'Incidencia cerrada exitosamente',
+      data: {
+        incidencia: {
+          id_incidencia: incidencia.id_incidencia,
+          categoria: incidencia.categoria,
+          descripcion: incidencia.descripcion,
+          estado: 'cerrada'
+        },
+        tecnico: incidencia.tecnico ? {
+          uid: incidencia.tecnico.uid,
+          nombre: incidencia.tecnico.nombre,
+          email: incidencia.tecnico.email
+        } : null,
+        // Indicar que se puede calificar
+        puede_calificar: !!incidencia.tecnico
+      }
+    });
+  } catch (error) {
+    console.error('Error en cerrarIncidencia:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error interno del servidor',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 }

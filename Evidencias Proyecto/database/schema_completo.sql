@@ -250,6 +250,40 @@ CREATE TABLE IF NOT EXISTS user_invitations (
 );
 
 -- ========================================
+-- TABLA DE CALIFICACIONES DE TÉCNICOS
+-- ========================================
+CREATE TABLE IF NOT EXISTS calificaciones_tecnicos (
+    id_calificacion BIGSERIAL PRIMARY KEY,
+    id_incidencia BIGINT NOT NULL REFERENCES incidencias(id_incidencia) ON DELETE CASCADE,
+    id_tecnico BIGINT NOT NULL REFERENCES usuarios(uid),
+    id_beneficiario BIGINT NOT NULL REFERENCES usuarios(uid),
+    calificacion INTEGER NOT NULL CHECK (calificacion >= 1 AND calificacion <= 5),
+    comentario TEXT,
+    fecha_calificacion TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Una calificación por incidencia
+    UNIQUE(id_incidencia)
+);
+
+-- ========================================
+-- VISTA PARA ESTADÍSTICAS DE CALIFICACIÓN
+-- ========================================
+CREATE OR REPLACE VIEW vista_calificaciones_tecnicos AS
+SELECT 
+    u.uid as id_tecnico,
+    u.nombre as nombre_tecnico,
+    COUNT(c.id_calificacion) as total_calificaciones,
+    ROUND(AVG(c.calificacion)::numeric, 1) as promedio_calificacion,
+    COUNT(CASE WHEN c.calificacion >= 4 THEN 1 END) as calificaciones_positivas,
+    COUNT(CASE WHEN c.calificacion <= 2 THEN 1 END) as calificaciones_negativas
+FROM usuarios u
+LEFT JOIN calificaciones_tecnicos c ON u.uid = c.id_tecnico
+WHERE u.rol IN ('tecnico', 'tecnico_campo')
+GROUP BY u.uid, u.nombre;
+
+-- ========================================
 -- ÍNDICES PARA OPTIMIZACIÓN
 -- ========================================
 
@@ -290,6 +324,11 @@ CREATE INDEX IF NOT EXISTS idx_postventa_item_room ON postventa_template_item(ro
 -- Media
 CREATE INDEX IF NOT EXISTS idx_media_entity ON media(entity_type, entity_id);
 CREATE INDEX IF NOT EXISTS idx_media_uploaded_by ON media(uploaded_by);
+
+-- Calificaciones técnicos
+CREATE INDEX IF NOT EXISTS idx_calificaciones_tecnico ON calificaciones_tecnicos(id_tecnico);
+CREATE INDEX IF NOT EXISTS idx_calificaciones_beneficiario ON calificaciones_tecnicos(id_beneficiario);
+CREATE INDEX IF NOT EXISTS idx_calificaciones_fecha ON calificaciones_tecnicos(fecha_calificacion);
 
 -- Recuperación contraseñas
 -- Proyecto: índices de coordenadas
