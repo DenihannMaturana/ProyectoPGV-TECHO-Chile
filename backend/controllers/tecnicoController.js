@@ -10,6 +10,7 @@ import { calcularEstadoPlazos } from '../utils/plazosLegales.js'
 import { listTemplatePlans } from '../services/MediaService.js'
 import { getAllIncidences, updateIncidence, logIncidenciaEvent, createIncidence, computePriority } from '../models/Incidence.js'
 import { calcularFechasLimite, obtenerGarantiaPorCategoria, calcularVencimientoGarantia, estaGarantiaVigente, computePriorityFromCategory } from '../utils/posventaConfig.js'
+import CalificacionTecnico from '../models/CalificacionTecnico.js'
 import multer from 'multer'
 import { listMediaForIncidencias, uploadIncidenciaMedia } from '../services/MediaService.js'
 
@@ -347,31 +348,62 @@ export async function getTechnicianDashboardStats(req, res) {
       if (errP) throw errP
       projectIds = (projects || []).map(p => p.id_proyecto)
       if (!projectIds.length) {
-        return res.json({ success:true, data: { asignadas: 0, pendientes: 0, resueltas: 0 }, meta: { month: `${y}-${String(m).padStart(2,'0')}` } })
+        // Aunque no tenga proyectos, obtener estadísticas de calificación
+        let calificacionStats = null
+        try {
+          calificacionStats = await CalificacionTecnico.obtenerEstadisticas(tecnicoUid)
+        } catch (error) {
+          console.error('Error obteniendo estadísticas de calificación:', error)
+          calificacionStats = {
+            total_calificaciones: 0,
+            promedio_calificacion: null,
+            calificaciones_positivas: 0,
+            calificaciones_negativas: 0
+          }
+        }
+        return res.json({ success:true, data: { asignadas: 0, pendientes: 0, resueltas: 0, calificacion: calificacionStats }, meta: { month: `${y}-${String(m).padStart(2,'0')}` } })
       }
     }
 
-    // 1) Total de incidencias activas en proyectos del técnico (no finalizadas)
-    // Para supervisores: todas las incidencias abiertas de sus proyectos
+    // 1) Total de incidencias activas asignadas al técnico (no finalizadas)
+    // Incluir tanto incidencias por proyecto como asignadas directamente
     let qAsignadas = supabase
       .from('incidencias')
       .select('id_incidencia, estado, viviendas!inner(id_proyecto)')
       .not('estado', 'in', '(cerrada,descartada,cancelada)')
-    if (userRole !== 'administrador') {
+    
+    if (userRole === 'administrador') {
+      // Admin ve todas
+    } else if (userRole === 'tecnico_campo') {
+      // Técnico de campo: solo incidencias asignadas a él
+      qAsignadas = qAsignadas.eq('id_usuario_tecnico', tecnicoUid)
+    } else {
+      // Técnico supervisor: incidencias de sus proyectos
       qAsignadas = qAsignadas.in('viviendas.id_proyecto', projectIds)
     }
+    
     const { data: asignadasData, error: asgErr } = await qAsignadas
     if (asgErr) throw asgErr
     const asignadas = (asignadasData || []).length
 
-  // 2) Pendientes este mes (abierta o en_proceso) reportadas este mes, en proyectos permitidos
+  // 2) Pendientes este mes (abierta o en_proceso) reportadas este mes
     let qPend = supabase
       .from('incidencias')
       .select('id_incidencia, estado, fecha_reporte, viviendas!inner(id_proyecto)')
       .in('estado', ['abierta', 'en_proceso'])
       .gte('fecha_reporte', start.toISOString())
       .lt('fecha_reporte', end.toISOString())
-    if (userRole !== 'administrador') qPend = qPend.in('viviendas.id_proyecto', projectIds)
+    
+    if (userRole === 'administrador') {
+      // Admin ve todas
+    } else if (userRole === 'tecnico_campo') {
+      // Técnico de campo: solo incidencias asignadas a él
+      qPend = qPend.eq('id_usuario_tecnico', tecnicoUid)
+    } else {
+      // Técnico supervisor: incidencias de sus proyectos
+      qPend = qPend.in('viviendas.id_proyecto', projectIds)
+    }
+    
     const { data: pendData, error: pendErr } = await qPend
     if (pendErr) throw pendErr
     const pendientes = (pendData || []).length
@@ -382,12 +414,55 @@ export async function getTechnicianDashboardStats(req, res) {
       .select('id_incidencia, estado, fecha_resuelta, fecha_cerrada, viviendas!inner(id_proyecto)')
       .in('estado', ['resuelta','cerrada'])
       .or(`and(estado.eq.resuelta,fecha_resuelta.gte.${start.toISOString()},fecha_resuelta.lt.${end.toISOString()}),and(estado.eq.cerrada,fecha_cerrada.gte.${start.toISOString()},fecha_cerrada.lt.${end.toISOString()})`)
-    if (userRole !== 'administrador') qRes = qRes.in('viviendas.id_proyecto', projectIds)
+    
+    if (userRole === 'administrador') {
+      // Admin ve todas
+    } else if (userRole === 'tecnico_campo') {
+      // Técnico de campo: solo incidencias asignadas a él
+      qRes = qRes.eq('id_usuario_tecnico', tecnicoUid)
+    } else {
+      // Técnico supervisor: incidencias de sus proyectos
+      qRes = qRes.in('viviendas.id_proyecto', projectIds)
+    }
+    
     const { data: resData, error: resErr } = await qRes
     if (resErr) throw resErr
     const finalizadas = (resData || []).length
 
-    return res.json({ success:true, data: { asignadas, pendientes, finalizadas }, meta: { month: `${y}-${String(m).padStart(2,'0')}` } })
+    // 4) Obtener estadísticas de calificación según el rol
+    let calificacionStats = null
+    try {
+      if (userRole === 'tecnico_campo') {
+        // Técnico de campo: solo SUS calificaciones personales
+        console.log('Obteniendo calificaciones PERSONALES para técnico de campo UID:', tecnicoUid);
+        calificacionStats = await CalificacionTecnico.obtenerEstadisticas(tecnicoUid)
+      } else {
+        // Técnico supervisor: calificaciones de TODOS los técnicos en sus proyectos
+        console.log('Obteniendo calificaciones de PROYECTOS para supervisor. Proyectos:', projectIds);
+        calificacionStats = await CalificacionTecnico.obtenerEstadisticasPorProyectos(projectIds)
+      }
+      console.log('Calificaciones obtenidas exitosamente:', calificacionStats);
+    } catch (error) {
+      console.error('Error obteniendo estadísticas de calificación:', error)
+      // No fallar si hay error en calificaciones, usar valores por defecto
+      calificacionStats = {
+        total_calificaciones: 0,
+        promedio_calificacion: null,
+        calificaciones_positivas: 0,
+        calificaciones_negativas: 0
+      }
+    }
+
+    return res.json({ 
+      success: true, 
+      data: { 
+        asignadas, 
+        pendientes, 
+        finalizadas,
+        calificacion: calificacionStats 
+      }, 
+      meta: { month: `${y}-${String(m).padStart(2,'0')}` } 
+    })
   } catch (error) {
     console.error('Error en dashboard stats técnico:', error)
     return res.status(500).json({ success:false, message:'Error al obtener estadísticas' })
@@ -1513,16 +1588,16 @@ export async function reviewPosventaForm(req, res) {
       .order('orden', { ascending: true })
     if (itemsErr) throw itemsErr
 
-    console.log('📋 Total items en formulario:', items?.length)
-    console.log('📋 Items completos:', JSON.stringify(items, null, 2))
+    console.log('Total items en formulario:', items?.length)
+    console.log('Items completos:', JSON.stringify(items, null, 2))
     
     // Determinar problemas de forma tolerante: solo consideramos OK si es estrictamente true
     const problemItems = (items || []).filter(i => {
       const isOk = i.ok === true // evita que strings 'false' pasen como true
       return !isOk && (i.crear_incidencia !== false)
     })
-    console.log('⚠️  Problem items detectados:', problemItems.length)
-    console.log('⚠️  Problem items:', JSON.stringify(problemItems.map(i => ({
+    console.log('Problem items detectados:', problemItems.length)
+    console.log('Problem items:', JSON.stringify(problemItems.map(i => ({
       item: i.item,
       categoria: i.categoria,
       ok: i.ok,
@@ -1573,7 +1648,7 @@ export async function reviewPosventaForm(req, res) {
         }
         const created = await createIncidence(payload)
         incidenciasCreadas.push(created)
-        console.log('✅ Incidencia agrupada creada:', created.id_incidencia)
+        console.log('Incidencia agrupada creada:', created.id_incidencia)
         await logIncidenciaEvent({ incidenciaId: created.id_incidencia, actorUid: tecnicoUid, actorRol: req.user?.rol || req.user?.role, tipo: 'creada_desde_posventa', comentario: 'Incidencia agrupada desde revisión de posventa' })
       } else {
         // Separadas: una por item
@@ -1605,7 +1680,7 @@ export async function reviewPosventaForm(req, res) {
           }
           const created = await createIncidence(payload)
           incidenciasCreadas.push(created)
-          console.log(`✅ Incidencia separada creada: ${created.id_incidencia} - ${it.item}`)
+          console.log(`Incidencia separada creada: ${created.id_incidencia} - ${it.item}`)
           await logIncidenciaEvent({ incidenciaId: created.id_incidencia, actorUid: tecnicoUid, actorRol: req.user?.rol || req.user?.role, tipo: 'creada_desde_posventa', comentario: `Creada desde revisión de posventa (item ${it.id})` })
         }
       }
@@ -1744,7 +1819,7 @@ export async function deliverTechnicianHousing(req, res) {
 }
 
 /**
- * 🆕 Obtiene visitas sugeridas para hoy del técnico de campo
+ *  Obtiene visitas sugeridas para hoy del técnico de campo
  * Algoritmo inteligente que ordena por:
  * 1. Fecha sugerida por supervisor (si es hoy)
  * 2. Plazos vencidos
@@ -1764,7 +1839,7 @@ export async function getVisitasSugeridas(req, res) {
     const fechaStr = req.query.fecha || new Date().toISOString().split('T')[0]
     const hoy = new Date().toISOString().split('T')[0]
     
-    console.log(`📅 Consultando visitas sugeridas para ${fechaStr} - Técnico: ${tecnicoUid}`)
+    console.log(`Consultando visitas sugeridas para ${fechaStr} - Técnico: ${tecnicoUid}`)
 
     // Solo técnicos de campo y supervisores pueden ver sus visitas
     if (!['tecnico', 'tecnico_campo', 'administrador'].includes(userRole)) {
@@ -1805,11 +1880,11 @@ export async function getVisitasSugeridas(req, res) {
     const { data: incidencias, error } = await query
 
     if (error) {
-      console.error('❌ Error consultando incidencias:', error)
+      console.error('Error consultando incidencias:', error)
       throw error
     }
 
-    console.log(`📋 Total incidencias activas del técnico: ${incidencias?.length || 0}`)
+    console.log(`Total incidencias activas del técnico: ${incidencias?.length || 0}`)
 
     if (!incidencias || incidencias.length === 0) {
       return res.json({
@@ -1837,21 +1912,21 @@ export async function getVisitasSugeridas(req, res) {
 
     // Algoritmo de priorización inteligente
     const incidenciasOrdenadas = incidenciasEnriquecidas.sort((a, b) => {
-      // 1️⃣ Prioridad MÁXIMA: Si supervisor puso fecha_visita_sugerida para hoy
+      // 1. Prioridad MÁXIMA: Si supervisor puso fecha_visita_sugerida para hoy
       const fechaSugeridaA = a.fecha_visita_sugerida?.split('T')[0]
       const fechaSugeridaB = b.fecha_visita_sugerida?.split('T')[0]
       
       if (fechaSugeridaA === fechaStr && fechaSugeridaB !== fechaStr) return -1
       if (fechaSugeridaB === fechaStr && fechaSugeridaA !== fechaStr) return 1
       
-      // 2️⃣ Plazos VENCIDOS → urgencia crítica
+      // 2. Plazos VENCIDOS → urgencia crítica
       const plazoA = a.plazos_legales?.estado_plazo
       const plazoB = b.plazos_legales?.estado_plazo
       
       if (plazoA === 'vencido' && plazoB !== 'vencido') return -1
       if (plazoB === 'vencido' && plazoA !== 'vencido') return 1
       
-      // 3️⃣ PRÓXIMOS A VENCER (≤3 días)
+      // 3. PRÓXIMOS A VENCER (≤3 días)
       if (plazoA === 'proximo_vencer' && plazoB !== 'proximo_vencer') return -1
       if (plazoB === 'proximo_vencer' && plazoA !== 'proximo_vencer') return 1
       
@@ -1862,13 +1937,13 @@ export async function getVisitasSugeridas(req, res) {
         if (diasA !== diasB) return diasA - diasB
       }
       
-      // 4️⃣ PRIORIDAD del reporte (alta > media > baja)
+      // 4. PRIORIDAD del reporte (alta > media > baja)
       const prioridadPeso = { 'alta': 3, 'media': 2, 'baja': 1 }
       const pesoA = prioridadPeso[(a.prioridad || '').toLowerCase()] || 0
       const pesoB = prioridadPeso[(b.prioridad || '').toLowerCase()] || 0
       if (pesoA !== pesoB) return pesoB - pesoA
       
-      // 5️⃣ ANTIGÜEDAD: más antiguas primero (FIFO)
+      // 5. ANTIGÜEDAD: más antiguas primero (FIFO)
       const fechaA = new Date(a.fecha_reporte).getTime()
       const fechaB = new Date(b.fecha_reporte).getTime()
       return fechaA - fechaB
@@ -1912,7 +1987,7 @@ export async function getVisitasSugeridas(req, res) {
     const vencidas = visitasSugeridas.filter(v => v.urgencia_nivel === 'critica').length
     const urgentes = visitasSugeridas.filter(v => v.urgencia_nivel === 'alta').length
 
-    console.log(`✅ Visitas procesadas:`)
+    console.log(`Visitas procesadas:`)
     console.log(`   - Total: ${visitasSugeridas.length}`)
     console.log(`   - Programadas para hoy: ${paraHoy}`)
     console.log(`   - Con fecha sugerida: ${conFechaSugerida}`)
@@ -1939,7 +2014,7 @@ export async function getVisitasSugeridas(req, res) {
     })
 
   } catch (error) {
-    console.error('❌ Error al obtener visitas sugeridas:', error)
+    console.error('Error al obtener visitas sugeridas:', error)
     return res.status(500).json({
       success: false,
       message: 'Error al obtener visitas sugeridas'

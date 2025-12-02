@@ -114,7 +114,7 @@ const createRecoveryEmailTemplate = (nombre, codigo) => {
             
             <div style="background-color: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; padding: 15px; margin: 20px 0;">
               <p style="color: #92400e; margin: 0; font-size: 14px;">
-                ⚠️ <strong>Este código expira en 5 minutos</strong> por seguridad.
+                <strong>Este código expira en 5 minutos</strong> por seguridad.
               </p>
             </div>
             

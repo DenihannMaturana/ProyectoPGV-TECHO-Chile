@@ -315,7 +315,7 @@ export async function getMe(req, res) {
     const data = await getUserById(userId);
     res.json({ success: true, data });
   } catch (error) {
-    console.error("❌ Error en /api/me:", error);
+    console.error("Error en /api/me:", error);
     res.status(500).json({
       success: false,
       message: "No se pudo obtener el usuario",

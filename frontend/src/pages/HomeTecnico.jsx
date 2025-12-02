@@ -9,9 +9,7 @@ import { tecnicoApi } from "../services/api";
 import {
   ClipboardDocumentListIcon,
   ExclamationTriangleIcon,
-  ChatBubbleBottomCenterTextIcon,
   WrenchScrewdriverIcon,
-  CubeIcon,
   DocumentTextIcon,
   CheckBadgeIcon,
   BoltIcon,
@@ -34,9 +32,10 @@ export default function HomeTecnico() {
   }
 
   const [month, setMonth] = useState(ymNow())
-  const [stats, setStats] = useState({ asignadas: 0, pendientes: 0, resueltas: 0 })
+  const [stats, setStats] = useState({ asignadas: 0, pendientes: 0, resueltas: 0, calificacion: null })
   const [loadingStats, setLoadingStats] = useState(true)
   const [errorStats, setErrorStats] = useState('')
+  const [calificaciones, setCalificaciones] = useState(null)
   const monthInputRef = useRef(null)
 
   // Urgentes (prioridad alta)
@@ -54,8 +53,30 @@ export default function HomeTecnico() {
     let mounted = true
     setLoadingStats(true); setErrorStats('')
     tecnicoApi.dashboardStats(month)
-      .then(res => { if (!mounted) return; setStats(res.data || { asignadas:0, pendientes:0, resueltas:0 }) })
-      .catch(err => { if (!mounted) return; setErrorStats(err.message || 'Error cargando estadísticas') })
+      .then(res => { 
+        if (!mounted) return; 
+        const data = res.data || { asignadas:0, pendientes:0, resueltas:0, calificacion: null }
+        console.log('🔍 Dashboard Stats recibidas:', data);
+        console.log('🔍 Calificaciones RAW:', data.calificacion);
+        console.log('🔍 Tipo de calificacion:', typeof data.calificacion);
+        console.log('🔍 Es null?:', data.calificacion === null);
+        console.log('🔍 Es undefined?:', data.calificacion === undefined);
+        setStats(data)
+        // Extraer calificaciones si vienen en el dashboard
+        if (data.calificacion) {
+          console.log('✅ Guardando calificaciones en estado:', data.calificacion);
+          setCalificaciones(data.calificacion)
+        } else {
+          console.warn('⚠️ No hay datos de calificación en la respuesta');
+          console.log('⚠️ Forzando objeto vacío de calificaciones');
+          setCalificaciones({ total_calificaciones: 0, promedio_calificacion: null })
+        }
+      })
+      .catch(err => { 
+        if (!mounted) return; 
+        console.error('❌ Error cargando estadísticas:', err);
+        setErrorStats(err.message || 'Error cargando estadísticas') 
+      })
       .finally(() => mounted && setLoadingStats(false))
     return () => { mounted = false }
   }, [month])
@@ -80,7 +101,7 @@ export default function HomeTecnico() {
     setMonth(`${ny}-${nm}`)
   }
 
-  console.log('🏠 HomeTecnico - Estado de autenticación:');
+  console.log(' HomeTecnico - Estado de autenticación:');
   console.log('  - user:', user);
   console.log('  - localStorage user:', localStorage.getItem('user'));
   console.log('  - localStorage token:', localStorage.getItem('token'));
@@ -153,7 +174,19 @@ export default function HomeTecnico() {
           <button className="text-left" onClick={() => navigate('/tecnico/incidencias?estado=resuelta,cerrada')}>
             <StatCard icon={<CheckBadgeIcon className={iconSize} />} label="Finalizadas" value={String(stats.finalizadas || stats.resueltas || 0)} subtitle="Este mes" accent='green' />
           </button>
-          <StatCard icon={<BoltIcon className={iconSize} />} label="Calificación" value="4.8" subtitle="Promedio" accent='purple' />
+          <div className="text-left">
+            <StatCard 
+              icon={<BoltIcon className={iconSize} />} 
+              label="Mi Calificación" 
+              value={stats.calificacion?.promedio_calificacion ? Number(stats.calificacion.promedio_calificacion).toFixed(1) : "Sin datos"} 
+              subtitle={
+                stats.calificacion?.total_calificaciones > 0
+                  ? `${stats.calificacion.total_calificaciones} evaluación${stats.calificacion.total_calificaciones !== 1 ? 'es' : ''}`
+                  : "Aún no has sido calificado"
+              } 
+              accent='purple' 
+            />
+          </div>
         </div>
   <SectionPanel title="Herramientas de Trabajo" description="Acciones y módulos frecuentes" as="section" showBack={false}>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -182,7 +215,7 @@ export default function HomeTecnico() {
                 className="card-surface p-4 flex flex-col sm:flex-row sm:items-start gap-4 border-l-4 border-orange-500 dark:border-orange-400 hover:bg-gray-50 dark:hover:bg-techo-gray-700 transition-colors cursor-pointer group" 
                 onClick={() => {
                   console.log('[CLICK] Incidencia:', i.id_incidencia);
-                  console.log('🔍 Estado antes de navegar:');
+                  console.log(' Estado antes de navegar:');
                   console.log('  - user en contexto:', user);
                   console.log('  - localStorage user:', localStorage.getItem('user'));
                   console.log('  - localStorage token:', localStorage.getItem('token'));
@@ -204,7 +237,7 @@ export default function HomeTecnico() {
                     onClick={(e) => {
                       e.stopPropagation();
                       console.log('[CLICK] Botón Ver Detalle:', i.id_incidencia);
-                      console.log('🔍 Estado antes de navegar:');
+                      console.log(' Estado antes de navegar:');
                       console.log('  - user en contexto:', user);
                       console.log('  - localStorage user:', localStorage.getItem('user'));
                       console.log('  - localStorage token:', localStorage.getItem('token'));
@@ -221,6 +254,104 @@ export default function HomeTecnico() {
             <button className="btn btn-secondary text-xs" onClick={() => navigate('/tecnico/incidencias?prioridad=alta')}>Ver urgentes</button>
           </div>
         </SectionPanel>
+
+        {/* Sección de Calificaciones */}
+        {calificaciones && calificaciones.total_calificaciones > 0 ? (
+          <SectionPanel 
+            title="Mi Desempeño - Calificaciones" 
+            description={`Evaluaciones de beneficiarios (${calificaciones.total_calificaciones} calificaciones recibidas)`}
+            as="section" 
+            variant='highlight' 
+            showBack={false}
+          >
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Promedio General */}
+              <div className="card-surface p-6 text-center">
+                <div className="flex justify-center items-center mb-3">
+                  <div className="text-5xl font-bold text-purple-600 dark:text-purple-400">
+                    {calificaciones.promedio_calificacion.toFixed(1)}
+                  </div>
+                  <div className="text-2xl text-yellow-500 ml-2"></div>
+                </div>
+                <p className="text-sm text-techo-gray-600 dark:text-techo-gray-300">Promedio General</p>
+                <p className="text-xs text-techo-gray-500 dark:text-techo-gray-400 mt-1">
+                  De 5.0 estrellas
+                </p>
+              </div>
+
+              {/* Distribución de Calificaciones */}
+              <div className="card-surface p-6">
+                <h4 className="text-sm font-semibold text-techo-gray-800 dark:text-white mb-4">Distribución</h4>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-techo-gray-600 dark:text-techo-gray-300">Positivas (4-5★)</span>
+                    <span className="text-sm font-semibold text-green-600 dark:text-green-400">
+                      {calificaciones.positivas || 0}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-techo-gray-600 dark:text-techo-gray-300">Neutrales (3★)</span>
+                    <span className="text-sm font-semibold text-yellow-600 dark:text-yellow-400">
+                      {calificaciones.neutrales || 0}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-techo-gray-600 dark:text-techo-gray-300">Negativas (1-2★)</span>
+                    <span className="text-sm font-semibold text-red-600 dark:text-red-400">
+                      {calificaciones.negativas || 0}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Progreso Visual */}
+              <div className="card-surface p-6">
+                <h4 className="text-sm font-semibold text-techo-gray-800 dark:text-white mb-4">Rendimiento</h4>
+                <div className="space-y-4">
+                  <div>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-techo-gray-600 dark:text-techo-gray-300">Satisfacción</span>
+                      <span className="font-semibold text-purple-600 dark:text-purple-400">
+                        {calificaciones.promedio_calificacion ? Math.round((calificaciones.promedio_calificacion / 5) * 100) : 0}%
+                      </span>
+                    </div>
+                    <div className="w-full bg-techo-gray-200 dark:bg-techo-gray-700 rounded-full h-2.5">
+                      <div 
+                        className="bg-purple-600 dark:bg-purple-400 h-2.5 rounded-full transition-all" 
+                        style={{ width: `${calificaciones.promedio_calificacion ? Math.round((calificaciones.promedio_calificacion / 5) * 100) : 0}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                  <div className="text-xs text-techo-gray-500 dark:text-techo-gray-400 mt-4">
+                    {calificaciones.promedio_calificacion >= 4.5 ? (
+                      <span className="text-green-600 dark:text-green-400 font-semibold">¡Excelente trabajo! Sigue así 🌟</span>
+                    ) : calificaciones.promedio_calificacion >= 3.5 ? (
+                      <span className="text-yellow-600 dark:text-yellow-400">Buen desempeño, puedes mejorar 💪</span>
+                    ) : (
+                      <span className="text-red-600 dark:text-red-400">Necesitas mejorar tu atención 📈</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </SectionPanel>
+        ) : (
+          <SectionPanel 
+            title="Mi Desempeño - Calificaciones" 
+            description="Evaluaciones de beneficiarios"
+            as="section" 
+            variant='highlight' 
+            showBack={false}
+          >
+            <div className="text-center py-8">
+              <div className="text-6xl mb-4"></div>
+              <p className="text-techo-gray-600 dark:text-techo-gray-300 mb-2">Aún no tienes calificaciones</p>
+              <p className="text-sm text-techo-gray-500 dark:text-techo-gray-400">
+                Los beneficiarios podrán calificar tu servicio cuando resuelvas y validen las incidencias.
+              </p>
+            </div>
+          </SectionPanel>
+        )}
 
         {/* Nota: La agenda de visitas ahora es dinámica por técnico de campo */}
         {/* Los supervisores asignan fechas sugeridas al asignar incidencias */}

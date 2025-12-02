@@ -922,7 +922,7 @@ export async function createNewProject(req, res) {
     let autoGeocodedScore = null;
     if (!inRange(latNum, lonNum) && ubicacion) {
       try {
-        console.log("🔍 Geocodificando ubicación del proyecto:", ubicacion);
+        console.log("Geocodificando ubicación del proyecto:", ubicacion);
         const results = await geocodeSearch(ubicacion);
         if (results && results.length > 0) {
           const first = results[0];
@@ -938,7 +938,7 @@ export async function createNewProject(req, res) {
               autoGeocodedProvider = "mapbox";
               autoGeocodedScore = first.relevance || 1;
               console.log(
-                "✅ Proyecto geocodificado automáticamente:",
+                "Proyecto geocodificado automáticamente:",
                 first.place_name,
                 "→",
                 latNum,
@@ -948,7 +948,7 @@ export async function createNewProject(req, res) {
           }
         }
       } catch (geoError) {
-        console.warn("⚠️ Error geocodificando proyecto:", geoError.message);
+        console.warn("Error geocodificando proyecto:", geoError.message);
         // No bloquear la creación si falla la geocodificación
       }
     }
@@ -1026,7 +1026,7 @@ export async function updateProjectById(req, res) {
     if (updates.ubicacion && !inRange(latNum, lonNum)) {
       try {
         console.log(
-          "🔍 Geocodificando nueva ubicación del proyecto:",
+          "Geocodificando nueva ubicación del proyecto:",
           updates.ubicacion
         );
         const results = await geocodeSearch(updates.ubicacion);
@@ -1044,7 +1044,7 @@ export async function updateProjectById(req, res) {
               updates.geocode_score = first.relevance || 1;
               updates.geocode_at = new Date();
               console.log(
-                "✅ Ubicación geocodificada automáticamente:",
+                "Ubicación geocodificada automáticamente:",
                 first.place_name,
                 "→",
                 latNum,
@@ -1055,7 +1055,7 @@ export async function updateProjectById(req, res) {
         }
       } catch (geoError) {
         console.warn(
-          "⚠️ Error geocodificando proyecto en actualización:",
+          "Error geocodificando proyecto en actualización:",
           geoError.message
         );
       }

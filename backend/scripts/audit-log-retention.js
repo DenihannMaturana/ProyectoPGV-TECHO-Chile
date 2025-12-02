@@ -55,7 +55,7 @@ async function getOldLogs(daysToKeep = RETENTION_CONFIG.DAYS_TO_KEEP) {
  */
 async function backupLogs(logs, filename) {
   if (!RETENTION_CONFIG.CREATE_BACKUP) {
-    console.log('⏭️  Backup deshabilitado en configuración');
+    console.log('Backup deshabilitado en configuración');
     return;
   }
 
@@ -77,8 +77,8 @@ async function backupLogs(logs, filename) {
   };
 
   fs.writeFileSync(filepath, JSON.stringify(backupData, null, 2));
-  console.log(`✅ Backup creado: ${filepath}`);
-  console.log(`📊 Registros respaldados: ${logs.length}`);
+  console.log(`Backup creado: ${filepath}`);
+  console.log(`Registros respaldados: ${logs.length}`);
   
   return filepath;
 }
@@ -97,11 +97,11 @@ async function deleteOldLogs(daysToKeep = RETENTION_CONFIG.DAYS_TO_KEEP) {
     .select();
 
   if (error) {
-    console.error('❌ Error eliminando logs antiguos:', error);
+    console.error('Error eliminando logs antiguos:', error);
     throw error;
   }
 
-  console.log(`🗑️  Logs eliminados: ${data?.length || 0}`);
+  console.log(`Logs eliminados: ${data?.length || 0}`);
   return data?.length || 0;
 }
 
@@ -138,47 +138,47 @@ async function cleanupAuditLogs(options = {}) {
   const daysToKeep = options.daysToKeep || RETENTION_CONFIG.DAYS_TO_KEEP;
   const dryRun = options.dryRun || false;
 
-  console.log('🔍 Iniciando limpieza de logs de auditoría...');
-  console.log(`📅 Retención configurada: ${daysToKeep} días`);
-  console.log(`🏃 Modo: ${dryRun ? 'DRY RUN (sin cambios)' : 'PRODUCCIÓN'}`);
+  console.log('Iniciando limpieza de logs de auditoría...');
+  console.log(`Retención configurada: ${daysToKeep} días`);
+  console.log(`Modo: ${dryRun ? 'DRY RUN (sin cambios)' : 'PRODUCCIÓN'}`);
 
   try {
     // 1. Obtener logs antiguos
-    console.log('\n1️⃣ Obteniendo logs antiguos...');
+    console.log('\n1. Obteniendo logs antiguos...');
     const oldLogs = await getOldLogs(daysToKeep);
     
     if (oldLogs.length === 0) {
-      console.log('✅ No hay logs antiguos para eliminar');
+      console.log('No hay logs antiguos para eliminar');
       return { deleted: 0, backed_up: 0 };
     }
 
-    console.log(`📊 Logs encontrados: ${oldLogs.length}`);
+    console.log(`Logs encontrados: ${oldLogs.length}`);
 
     // 2. Generar reporte
-    console.log('\n2️⃣ Generando reporte...');
+    console.log('\n2. Generando reporte...');
     const summary = generateSummaryReport(oldLogs);
-    console.log('📈 Resumen:', JSON.stringify(summary, null, 2));
+    console.log('Resumen:', JSON.stringify(summary, null, 2));
 
     // 3. Crear backup
-    console.log('\n3️⃣ Creando backup...');
+    console.log('\n3. Creando backup...');
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const backupFile = `audit_log_backup_${timestamp}.json`;
     await backupLogs(oldLogs, backupFile);
 
     // 4. Eliminar logs (solo si no es dry run)
     if (!dryRun) {
-      console.log('\n4️⃣ Eliminando logs de la base de datos...');
+      console.log('\n4. Eliminando logs de la base de datos...');
       const deletedCount = await deleteOldLogs(daysToKeep);
-      console.log(`✅ Proceso completado. Logs eliminados: ${deletedCount}`);
+      console.log(`Proceso completado. Logs eliminados: ${deletedCount}`);
       
       return { deleted: deletedCount, backed_up: oldLogs.length };
     } else {
-      console.log('\n⚠️  DRY RUN: No se eliminaron logs de la base de datos');
+      console.log('\nDRY RUN: No se eliminaron logs de la base de datos');
       return { deleted: 0, backed_up: oldLogs.length, would_delete: oldLogs.length };
     }
 
   } catch (error) {
-    console.error('❌ Error durante la limpieza:', error);
+    console.error('Error durante la limpieza:', error);
     throw error;
   }
 }
@@ -230,19 +230,19 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const showStats = args.includes('--stats');
 
   if (showStats) {
-    console.log('📊 Estadísticas de almacenamiento de audit_log:\n');
+    console.log('Estadísticas de almacenamiento de audit_log:\n');
     getStorageStats().then(stats => {
       console.log(JSON.stringify(stats, null, 2));
-      console.log(`\n📅 Los logs más antiguos tienen ${stats.retention_days} días`);
+      console.log(`\nLos logs más antiguos tienen ${stats.retention_days} días`);
     });
   } else {
     cleanupAuditLogs({ dryRun })
       .then(result => {
-        console.log('\n✅ Proceso finalizado:', result);
+        console.log('\nProceso finalizado:', result);
         process.exit(0);
       })
       .catch(error => {
-        console.error('\n❌ Error:', error);
+        console.error('\nError:', error);
         process.exit(1);
       });
   }

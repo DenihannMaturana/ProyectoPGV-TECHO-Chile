@@ -2,6 +2,7 @@ import React, { useContext, useEffect, useMemo, useState } from "react";
 import { createPortal } from 'react-dom'
 import { fetchHistorialIncidencia, groupEventsByDay, eventIcon } from '../services/historial'
 import ValidationModal from '../components/ValidationModal';
+import CalificacionModal from '../components/CalificacionModal';
 import { Modal } from "../components/ui/Modal";
 import { useNavigate } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
@@ -132,6 +133,11 @@ export default function HomeBeneficiario() {
   const [detailInc, setDetailInc] = useState(null);
   const [validationModalOpen, setValidationModalOpen] = useState(false);
   const [validationLoading, setValidationLoading] = useState(false);
+  
+  // Estados para calificación
+  const [showCalificacionModal, setShowCalificacionModal] = useState(false);
+  const [incidenciaParaCalificar, setIncidenciaParaCalificar] = useState(null);
+  const [tecnicoParaCalificar, setTecnicoParaCalificar] = useState(null);
   const [historialInc, setHistorialInc] = useState([]);
   const [loadingHistorial, setLoadingHistorial] = useState(false);
   const [histMeta, setHistMeta] = useState({ total:0, limit:50, offset:0, has_more:false })
@@ -573,7 +579,18 @@ export default function HomeBeneficiario() {
                   <CardIncidencia
                     incidencia={report.raw}
                     onOpen={async (inc) => {
-                      setDetailInc(inc)
+                      // Recargar incidencia con todos los datos (incluyendo técnico)
+                      try {
+                        console.log('📋 Abriendo detalle de incidencia:', inc.id_incidencia);
+                        const response = await beneficiarioApi.listarIncidencias(1, 0, `id=${inc.id_incidencia}`);
+                        const incidenciaCompleta = response.data?.[0] || inc;
+                        console.log('📋 Incidencia recargada con técnico:', incidenciaCompleta);
+                        setDetailInc(incidenciaCompleta);
+                      } catch (error) {
+                        console.error('Error recargando incidencia:', error);
+                        setDetailInc(inc); // Usar la que tenemos si falla
+                      }
+                      
                       setHistorialInc([]); setHistMeta({ total:0, limit:50, offset:0, has_more:false })
                       setLoadingHistorial(true)
                       try {
@@ -743,13 +760,73 @@ export default function HomeBeneficiario() {
                     loading={validationLoading}
                     onClose={()=> setValidationModalOpen(false)}
                     onAccept={async ()=>{
+                      console.log('🔵 INICIANDO VALIDACIÓN CONFORME');
+                      console.log('🔵 detailInc completo:', JSON.stringify(detailInc, null, 2));
+                      console.log('🔵 detailInc.tecnico:', detailInc.tecnico);
+                      console.log('🔵 detailInc.id_usuario_tecnico:', detailInc.id_usuario_tecnico);
+                      
                       setValidationLoading(true)
+                      
+                      // Guardar info del técnico ANTES de validar (puede perderse al refrescar)
+                      const tecnicoInfo = detailInc.tecnico?.uid || detailInc.id_usuario_tecnico ? {
+                        uid: detailInc.tecnico?.uid || detailInc.id_usuario_tecnico,
+                        nombre: detailInc.tecnico?.nombre || detailInc.tecnico?.email || 'Técnico asignado'
+                      } : null;
+                      
+                      console.log('📋 Técnico extraído:', tecnicoInfo);
+                      
                       try {
+                        console.log('🟢 Llamando validarIncidencia...');
                         await beneficiarioApi.validarIncidencia(detailInc.id_incidencia,{ conforme:true });
+                        console.log('✅ Validación exitosa - Incidencia cerrada');
+                        
+                        // Cerrar modal de validación PRIMERO
+                        setValidationModalOpen(false);
+                        setValidationLoading(false);
+                        
+                        // Recargar datos para obtener estado actualizado
+                        console.log('🔄 Recargando datos...');
                         await loadData();
-                        const refreshed = incidencias.find(i=>i.id_incidencia===detailInc.id_incidencia); if (refreshed) setDetailInc(refreshed);
-                        setValidationModalOpen(false)
-                      } catch(e){ setError(e.message||'Error validando') } finally { setValidationLoading(false) }
+                        const refreshed = incidencias.find(i=>i.id_incidencia===detailInc.id_incidencia); 
+                        if (refreshed) {
+                          setDetailInc(refreshed);
+                          console.log('✅ Incidencia actualizada:', refreshed.estado);
+                        }
+                        
+                        // Esperar un frame para que React procese el cierre del modal anterior
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                        
+                        // Abrir modal de calificación si hay técnico
+                        if (tecnicoInfo && tecnicoInfo.uid) {
+                          console.log('⭐ ABRIENDO MODAL DE CALIFICACIÓN');
+                          console.log('⭐ incidenciaParaCalificar:', {
+                            id_incidencia: detailInc.id_incidencia,
+                            categoria: detailInc.categoria,
+                            descripcion: detailInc.descripcion
+                          });
+                          console.log('⭐ tecnicoParaCalificar:', tecnicoInfo);
+                          
+                          setIncidenciaParaCalificar({
+                            id_incidencia: detailInc.id_incidencia,
+                            categoria: detailInc.categoria,
+                            descripcion: detailInc.descripcion
+                          });
+                          setTecnicoParaCalificar(tecnicoInfo);
+                          setShowCalificacionModal(true);
+                          
+                          console.log('⭐ Modal de calificación abierto');
+                        } else {
+                          console.error('❌ NO SE PUEDE CALIFICAR - Técnico no encontrado');
+                          console.error('❌ tecnicoInfo:', tecnicoInfo);
+                          console.error('❌ detailInc.tecnico:', detailInc.tecnico);
+                          console.error('❌ detailInc.id_usuario_tecnico:', detailInc.id_usuario_tecnico);
+                          setError('No se puede calificar: técnico no identificado');
+                        }
+                      } catch(e){ 
+                        console.error('❌ ERROR en validación:', e);
+                        setError(e.message||'Error validando');
+                        setValidationLoading(false); 
+                      }
                     }}
                     onReject={async ({ comentario, file })=>{
                       setValidationLoading(true)
@@ -1213,6 +1290,24 @@ export default function HomeBeneficiario() {
     variant="techo"
     side="right"
     offset={24}
+  />
+
+  {/* Modal de Calificación */}
+  <CalificacionModal
+    open={showCalificacionModal}
+    onClose={() => {
+      setShowCalificacionModal(false);
+      setIncidenciaParaCalificar(null);
+      setTecnicoParaCalificar(null);
+    }}
+    incidencia={incidenciaParaCalificar}
+    tecnico={tecnicoParaCalificar}
+    onCalificacionCreada={(nuevaCalificacion) => {
+      console.log('Calificación creada:', nuevaCalificacion);
+      setShowCalificacionModal(false);
+      setIncidenciaParaCalificar(null);
+      setTecnicoParaCalificar(null);
+    }}
   />
     </DashboardLayout>
   );
